@@ -3,8 +3,8 @@
 import argparse
 import logging
 from Bio import Phylo
-from scipy.cluster import hierarchy
 import matplotlib.pyplot as plt
+from scipy.cluster import hierarchy
 
 
 class DiversiTree(object):
@@ -123,6 +123,8 @@ def draw_clustered_tree(treefile, clusters):
 
 
 if __name__ == '__main__':
+    # TODO: Have some different subparsers - one for just diversitree process given a treefile,
+    # one for parsnp tree generation and then diversitree, etc
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--treefile',
                         type=str,
