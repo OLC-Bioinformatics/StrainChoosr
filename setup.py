@@ -11,6 +11,6 @@ setup(
     author_email='andrew.low@canada.ca',
     url='https://github.com/lowandrew/DiversiTree',
     install_requires=['biopython',
-                      'pytest',
-                      'scipy']
+                      'scipy',
+                      'matplotlib']
 )

@@ -3,7 +3,6 @@
 import argparse
 import logging
 from Bio import Phylo
-import matplotlib.pyplot as plt
 from scipy.cluster import hierarchy
 
 
@@ -33,9 +32,10 @@ class DiversiTree(object):
 
     def draw_colored_dendrogram(self, linkage):
         # TODO: Figure this out more.
-        fig, axes = plt.subplots(1, 1)
-        dn = hierarchy.dendrogram(linkage, ax=axes, labels=self.terminal_clades, orientation='left')
-        plt.show()
+        # fig, axes = plt.subplots(1, 1)
+        # dn = hierarchy.dendrogram(linkage, ax=axes, labels=self.terminal_clades, orientation='left')
+        # plt.show()
+        pass
 
     def find_clusters(self, linkage, desired_clusters=5, criterion='distance', step_size=0.00003):
         """
@@ -143,12 +143,4 @@ if __name__ == '__main__':
     clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=args.number)
     for cluster in clusters:
         print(diversitree.choose_best_representative(cluster, method='closest'))
-        # print(diversitree.cluster_contains_root(cluster))
-    diversitree.draw_colored_dendrogram(linkage)
-    # clusters = find_clusters(treefile=args.treefile,
-    #                          desired_clusters=args.number)
-    # for i in range(len(clusters)):
-    #     print('Cluster {}'.format(i))
-    #     print(choose_representative_strain(clusters[i], Phylo.read(args.treefile, 'newick')))
-    # draw_clustered_tree(treefile=args.treefile,
-    #                     clusters=clusters)
+
