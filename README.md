@@ -1,13 +1,13 @@
-# DiversiTree
+# StrainChoosr
 
-DiversiTree examines phylogenetic trees and will give you the X strains that represent the most diversity
+StrainChoosr examines phylogenetic trees and will give you the X strains that represent the most diversity
 within your tree.
 
 ### Installation
 
 Install via pip/pip3:
 
-`pip install diversitree`
+`pip install strainchoosr`
 
 ### Usage
 
@@ -18,8 +18,8 @@ From the command line, the following will print to screen your representative st
 Within a script:
 
 ```python
-from diversitree import diversitree
-dt = diversitree.DiversiTree(tree_file='path/to/newick/formatted/treefile')
+from strainchoosr import strainchoosr
+dt = strainchoosr.StrainChoosr(tree_file='path/to/newick/formatted/treefile')
 # Create a linkage matrix using SciPy
 linkage = dt.create_linkage()
 # Find desired number of clusters

@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 
-import argparse
+# Core python library
 import logging
+import argparse
+
+# Other stuff
 import ete3
 from scipy.cluster import hierarchy
 
 
-class DiversiTree(object):
-    def __init__(self, tree_file, tree_format='newick'):
+class StrainChoosr(object):
+    def __init__(self, tree_file):
         self.tree = ete3.PhyloTree(newick=tree_file)
         self.terminal_clades = self.tree.get_leaves()
 
@@ -29,13 +32,6 @@ class DiversiTree(object):
                 matrix.append(distance_between_tips)
 
         return hierarchy.linkage(matrix, method=linkage_method)
-
-    def draw_colored_dendrogram(self, linkage):
-        # TODO: Figure this out more.
-        # fig, axes = plt.subplots(1, 1)
-        # dn = hierarchy.dendrogram(linkage, ax=axes, labels=self.terminal_clades, orientation='left')
-        # plt.show()
-        pass
 
     def find_clusters(self, linkage, desired_clusters=5, criterion='distance', step_size=0.00003):
         """
@@ -116,7 +112,7 @@ def main():
     logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                         level=logging.INFO,
                         datefmt='%Y-%m-%d %H:%M:%S')
-    diversitree = DiversiTree(tree_file=args.treefile)
+    diversitree = StrainChoosr(tree_file=args.treefile)
     linkage = diversitree.create_linkage()
     clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=args.number)
     for cluster in clusters:
