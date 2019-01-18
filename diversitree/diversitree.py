@@ -2,14 +2,14 @@
 
 import argparse
 import logging
-from Bio import Phylo
+import ete3
 from scipy.cluster import hierarchy
 
 
 class DiversiTree(object):
     def __init__(self, tree_file, tree_format='newick'):
-        self.tree = Phylo.read(tree_file, tree_format)
-        self.terminal_clades = self.tree.get_terminals()
+        self.tree = ete3.PhyloTree(newick=tree_file)
+        self.terminal_clades = self.tree.get_leaves()
 
     def create_linkage(self, linkage_method='average'):
         """
@@ -25,7 +25,7 @@ class DiversiTree(object):
         matrix = list()
         for i in range(len(self.terminal_clades)):
             for j in range(i + 1, len(self.terminal_clades)):
-                distance_between_tips = self.tree.distance(self.terminal_clades[i], self.terminal_clades[j])
+                distance_between_tips = self.tree.get_distance(target=self.terminal_clades[i], target2=self.terminal_clades[j])
                 matrix.append(distance_between_tips)
 
         return hierarchy.linkage(matrix, method=linkage_method)
@@ -65,7 +65,7 @@ class DiversiTree(object):
         for i in range(num_clusters):
             clusters.append(list())
         for i in range(len(clustering)):
-            clusters[clustering[i] - 1].append(self.terminal_clades[i])
+            clusters[clustering[i] - 1].append(self.terminal_clades[i].name)
         return clusters
 
     def choose_best_representative(self, cluster, method='closest'):
@@ -90,7 +90,7 @@ class DiversiTree(object):
             total_length = 0.0
             for strain2 in cluster:
                 if strain1 != strain2:
-                    total_length += self.tree.distance(strain1, strain2)
+                    total_length += self.tree.get_distance(target=strain1, target2=strain2)
             if method == 'closest':
                 if total_length < best_distance:
                     best_distance = total_length
@@ -101,30 +101,8 @@ class DiversiTree(object):
                     representative = strain1
         return representative
 
-    def cluster_contains_root(self, cluster):
-        mrca = self.tree.common_ancestor(cluster)
-        if mrca == self.tree.root:
-            return True
-        else:
-            return False
 
-
-def draw_clustered_tree(treefile, clusters):
-    # TODO: Needs extremely major renovations - this should save to a file, not show up and halt the script.
-    # Also, need to get a better color scheme created.
-    colors = ['blue', 'red', 'green', 'purple', 'yellow', 'pink', 'gray']
-    tree = Phylo.read(treefile, 'newick')
-    i = 0
-    for cluster in clusters:
-        mrca = tree.common_ancestor(cluster)
-        mrca.color = colors[i]
-        i += 1
-    Phylo.draw(tree)
-
-
-if __name__ == '__main__':
-    # TODO: Have some different subparsers - one for just diversitree process given a treefile,
-    # one for parsnp tree generation and then diversitree, etc
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--treefile',
                         type=str,
@@ -143,4 +121,8 @@ if __name__ == '__main__':
     clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=args.number)
     for cluster in clusters:
         print(diversitree.choose_best_representative(cluster, method='closest'))
+
+
+if __name__ == '__main__':
+    main()
 

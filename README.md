@@ -28,5 +28,3 @@ clusters = dt.find_clusters(linkage=linkage, desired_clusters=3)  # Or whatever 
 for cluster in clusters:
     print(dt.choose_best_representative(cluster))
 ```
-
-
