@@ -6,12 +6,13 @@ import argparse
 
 # Other stuff
 import ete3
+from ete3 import NodeStyle, TreeStyle, TextFace
 from scipy.cluster import hierarchy
 
 
 class StrainChoosr(object):
     def __init__(self, tree_file):
-        self.tree = ete3.PhyloTree(newick=tree_file)
+        self.tree = ete3.Tree(newick=tree_file)   # Would have as PhyloTree, but that makes causes problems with tree drawing
         self.terminal_clades = self.tree.get_leaves()
 
     def create_linkage(self, linkage_method='average'):
@@ -97,6 +98,31 @@ class StrainChoosr(object):
                     representative = strain1
         return representative
 
+    def create_colored_tree_tip_image(self, representatives, output_file):
+        """
+        Given a list of representatives, shows (for now) a phylogeny that has those representatives highlighted in
+        a color to show it off.
+        :param representatives: List with each strain name that has the
+        :return:
+        """
+        ts = TreeStyle()
+        ts.show_leaf_name = False
+        for terminal_clade in self.terminal_clades:
+            if terminal_clade.name in representatives:
+                nstyle = NodeStyle()
+                nstyle['shape'] = 'circle'
+                nstyle['fgcolor'] = 'red'
+                nstyle['size'] = 10
+                name_face = TextFace(terminal_clade.name, fgcolor='red', fsize=10)
+                terminal_clade.add_face(name_face, column=0)
+                terminal_clade.set_style(nstyle)
+            else:
+                name_face = TextFace(terminal_clade.name, fgcolor='black', fsize=8)
+                terminal_clade.add_face(name_face, column=0)
+
+        self.tree.ladderize()
+        self.tree.render(output_file, dpi=300, tree_style=ts)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -115,8 +141,12 @@ def main():
     diversitree = StrainChoosr(tree_file=args.treefile)
     linkage = diversitree.create_linkage()
     clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=args.number)
+    reps = list()
     for cluster in clusters:
-        print(diversitree.choose_best_representative(cluster, method='closest'))
+        rep = diversitree.choose_best_representative(cluster, method='closest')
+        reps.append(rep)
+
+    diversitree.create_colored_tree_tip_image(representatives=reps, output_file='test.png')
 
 
 if __name__ == '__main__':

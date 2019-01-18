@@ -16,5 +16,7 @@ setup(
     url='https://github.com/lowandrew/StrainChoosr',
     install_requires=['scipy',
                       'pytest',
-                      'ete3']
+                      'ete3',
+                      'PyQt5',  # Apparently required by ete3 for visualisation, but not listed in that setup.py...
+                      ]
 )
