@@ -5,6 +5,7 @@ import os
 import copy
 import base64
 import random
+import shutil
 import logging
 import tempfile
 import argparse
@@ -20,9 +21,14 @@ def random_color():
 
 
 class StrainChoosr(object):
-    def __init__(self, tree_file):
+    def __init__(self, tree_file, tree_mode='r'):
+        assert tree_mode in ['r', 'c']
+        self.tree_mode = tree_mode
         self.tree = ete3.Tree(newick=tree_file)   # Would have as PhyloTree, but that makes causes problems with tree drawing
         self.terminal_clades = self.tree.get_leaves()
+        self.colors = list()
+        for i in range(100):
+            self.colors.append(random_color())
 
     def create_linkage(self, linkage_method='average'):
         """
@@ -74,7 +80,7 @@ class StrainChoosr(object):
             clusters[clustering[i] - 1].append(self.terminal_clades[i].name)
         return clusters
 
-    def choose_best_representative(self, cluster, method='closest'):
+    def choose_best_representative(self, cluster, include_strains=None, method='closest'):
         """
         Given a cluster, will find the tip that best represents that cluster by either choosing the tip that is on
         average closest to the other tips in that cluster (the default) or whatever is on average farthest from other
@@ -91,7 +97,27 @@ class StrainChoosr(object):
             best_distance = 100000000.0  # Start off at an absolutely ridiculous value.
         elif method == 'farthest':
             best_distance = -0.1
-        # Iterate through
+        # Find out if user has any strains they want chosen for sure.
+        if include_strains is not None:
+            strains_in_include = list()
+            for strain in cluster:
+                if strain in include_strains:
+                    strains_in_include.append(strain)
+            if len(strains_in_include) == 1:
+                return strains_in_include[0]
+            elif len(strains_in_include) > 1:
+                smallest_index = 99999
+                representative = 'NA'
+                for strain in strains_in_include:
+                    if include_strains.index(strain) < smallest_index:
+                        smallest_index = include_strains.index(strain)
+                        representative = strain
+                logging.warning('WARNING: More than one strain listed as to be included found in a cluster! Strains in '
+                                'same cluster were: {}'.format(strains_in_include))
+                logging.warning('Strain chosen was: {}'.format(representative))
+                return representative
+
+        # If no include strains specified or none were part of cluster, continue as normal.
         for strain1 in cluster:
             total_length = 0.0
             for strain2 in cluster:
@@ -158,7 +184,10 @@ class StrainChoosr(object):
         for cluster in clusters:
             common_ancestor_groups.append(self.find_common_ancestor_and_descendants(tree, cluster))
         for common_ancestor_group in common_ancestor_groups:
-            group_color = random_color()
+            try:  # Try to keep color assignment consistent. If more than 100 colors, color reverts to random
+                group_color = self.colors[common_ancestor_groups.index(common_ancestor_group)]
+            except IndexError:
+                group_color = random_color()
             nstyle = NodeStyle()
             nstyle['hz_line_color'] = group_color
             nstyle['vt_line_color'] = group_color
@@ -173,6 +202,7 @@ class StrainChoosr(object):
     def draw_clusters_and_tips(self, clusters, output_file, representatives):
         tree = self.draw_clustered_tree(clusters=clusters, output_file=None)
         ts = TreeStyle()
+        ts.mode = self.tree_mode
         ts.show_leaf_name = False
         for terminal_clade in tree.get_leaves():
             if terminal_clade.name in representatives:
@@ -190,13 +220,15 @@ class StrainChoosr(object):
 
 
 class CompletedStrainChoosr:
-    def __init__(self, representatives, image, name):
+    def __init__(self, representatives, image, name, clusters):
         self.representatives = representatives
         self.image = image
         self.name = name
+        self.clusters = clusters
 
 
 def generate_html_report(completed_choosr_list, output_report):
+    # With tabs as shown in w3schools: https://www.w3schools.com/howto/howto_js_tabs.asp
     style = """
     <style>
     body {font-family: Arial;}
@@ -305,12 +337,22 @@ def main():
                                     type=str,
                                     required=True,
                                     help='Output folder to store results of StrainChoosr.')
-
+    treefile_subparser.add_argument('--tree_mode',
+                                    default='r',
+                                    choices=['r', 'c'],
+                                    help='Mode to display output trees in - choose from r for rectangular '
+                                         'or c for circular. Defaults to rectangular.')
+    treefile_subparser.add_argument('--include_strains',
+                                    type=str,
+                                    nargs='*',
+                                    help='Names of strains that must be chosen. In the event that more than one strain '
+                                         'that is from the same cluster is picked, the first strain in the list will '
+                                         'take precedence.')
     # SUBPARSER FOR TREE CREATION
-    tree_creation = subparsers.add_parser('tree_create', help='Create a tree from a set of FASTA sequences.')
+    tree_creation = subparsers.add_parser('create', help='Create a tree from a set of FASTA sequences.')
     tree_creation.add_argument('arg1')
 
-    #$ SUBPARSER FOR CREATION AND CHOOSING
+    # SUBPARSER FOR CREATION AND CHOOSING
     create_and_choose = subparsers.add_parser('create_and_choose', help='Both creates a tree and chooses strains '
                                                                         'from the tree created.')
     create_and_choose.add_argument('asdf')
@@ -320,34 +362,43 @@ def main():
     logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                         level=logging.INFO,
                         datefmt='%Y-%m-%d %H:%M:%S')
+
+    # TODO: Add capability to specify certain strains that must be picked, if possible
     # JUST CHOOSE STRAINS
     if args.subparsers == 'choose':
         if not os.path.isdir(args.output_folder):
             os.makedirs(args.output_folder)
         with tempfile.TemporaryDirectory() as tmpdir:
             completed_choosrs = list()
-            diversitree = StrainChoosr(tree_file=args.treefile)
+            diversitree = StrainChoosr(tree_file=args.treefile, tree_mode=args.tree_mode)
             linkage = diversitree.create_linkage()
             for number in args.number:
                 clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=number)
                 reps = list()
                 for cluster in clusters:
-                    rep = diversitree.choose_best_representative(cluster, method='closest')
+                    rep = diversitree.choose_best_representative(cluster, method='closest', include_strains=args.include_strains)
                     reps.append(rep)
                 output_file = os.path.join(tmpdir, 'strains_{}.png'.format(number))
                 diversitree.draw_clusters_and_tips(clusters=clusters, output_file=output_file, representatives=reps)
                 completed_choosrs.append(CompletedStrainChoosr(representatives=reps,
                                                                image=output_file,
-                                                               name='{} Strains'.format(number)))
+                                                               name='{} Strains'.format(number),
+                                                               clusters=clusters))
             html_report = os.path.join(args.output_folder, 'StrainChoosr.html')
             generate_html_report(completed_choosr_list=completed_choosrs,
                                  output_report=html_report)
 
     # JUST CREATE A TREE
-    elif args.subparsers == 'tree_create':
+    elif args.subparsers == 'create':
         print('Create tree ')
 
     # CREATE A TREE AND CHOOSE STRAINS
+    elif args.subparsers == 'create_and_choose':
+        print('create_and_choose')
+
+    # User put no subcommand - give them the help menu
+    else:
+        parser.print_help()
 
 
 if __name__ == '__main__':
