@@ -9,6 +9,7 @@ import shutil
 import logging
 import tempfile
 import argparse
+from collections import OrderedDict
 
 # Other stuff
 import ete3
@@ -29,6 +30,25 @@ class StrainChoosr(object):
         self.colors = list()
         for i in range(100):
             self.colors.append(random_color())
+
+    def find_closest_relatives(self, starting_strain, num_closest_strains):
+        closest_relatives = list()
+        distance_dict = dict()
+        ref_leaf = self.tree.get_leaves_by_name(starting_strain)[0]
+        for leaf in self.terminal_clades:
+            if leaf != ref_leaf:
+                distance = self.tree.get_distance(ref_leaf, leaf)
+                distance_dict[leaf.name] = distance
+
+        # Use some stackoverflow magic to sort dict https://stackoverflow.com/questions/613183/how-do-i-sort-a-dictionary-by-value
+        sorted_dict = OrderedDict(sorted(distance_dict.items(), key=lambda x: x[1]))
+        i = 0
+        for key in sorted_dict:
+            if i < num_closest_strains:
+                closest_relatives.append(key)
+                i += 1
+
+        return closest_relatives
 
     def create_linkage(self, linkage_method='average'):
         """
@@ -133,7 +153,7 @@ class StrainChoosr(object):
                     representative = strain1
         return representative
 
-    def create_colored_tree_tip_image(self, representatives, output_file):
+    def create_colored_tree_tip_image(self, representatives, output_file, ref=None):
         """
         Given a list of representatives, shows (for now) a phylogeny that has those representatives highlighted in
         a color to show it off.
@@ -150,6 +170,14 @@ class StrainChoosr(object):
                 nstyle['fgcolor'] = 'red'
                 nstyle['size'] = 10
                 name_face = TextFace(terminal_clade.name, fgcolor='red', fsize=10)
+                terminal_clade.add_face(name_face, column=0)
+                terminal_clade.set_style(nstyle)
+            elif terminal_clade.name == ref:
+                nstyle = NodeStyle()
+                nstyle['shape'] = 'circle'
+                nstyle['fgcolor'] = 'blue'
+                nstyle['size'] = 10
+                name_face = TextFace(terminal_clade.name, fgcolor='blue', fsize=10)
                 terminal_clade.add_face(name_face, column=0)
                 terminal_clade.set_style(nstyle)
             else:
@@ -318,36 +346,50 @@ def generate_html_report(completed_choosr_list, output_report):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='StrainChoosr provides a set of tools for choosing the most diverse '
-                                                 'set of strains from a set of DNA sequences or protein sequences.')
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument('-t', '--treefile',
+                               type=str,
+                               required=True,
+                               help='Path to treefile, in newick format.')
+    parent_parser.add_argument('-n', '--number',
+                               type=int,
+                               nargs='+',
+                               required=True,
+                               help='Number of representatives wanted.')
+    parent_parser.add_argument('-o', '--output_folder',
+                               type=str,
+                               required=True,
+                               help='Output folder to store results of StrainChoosr.')
+    parent_parser.add_argument('--tree_mode',
+                               default='r',
+                               choices=['r', 'c'],
+                               help='Mode to display output trees in - choose from r for rectangular ' 
+                                    'or c for circular. Defaults to rectangular.')
+    parser = argparse.ArgumentParser(description='StrainChoosr provides a set of tools for choosing the most or '
+                                                 'least diverse set of strains from a set of DNA or protein sequences.')
     subparsers = parser.add_subparsers(help='asdf', dest='subparsers')
 
-    # SUBPARSER FOR TREE GENERATION
-    treefile_subparser = subparsers.add_parser('choose', help='For strain choosing if you already have a tree file.')
-    treefile_subparser.add_argument('-t', '--treefile',
-                                    type=str,
-                                    required=True,
-                                    help='Path to treefile, in newick format.')
-    treefile_subparser.add_argument('-n', '--number',
-                                    type=int,
-                                    nargs='+',
-                                    required=True,
-                                    help='Number of representatives wanted.')
-    treefile_subparser.add_argument('-o', '--output_folder',
-                                    type=str,
-                                    required=True,
-                                    help='Output folder to store results of StrainChoosr.')
-    treefile_subparser.add_argument('--tree_mode',
-                                    default='r',
-                                    choices=['r', 'c'],
-                                    help='Mode to display output trees in - choose from r for rectangular '
-                                         'or c for circular. Defaults to rectangular.')
+    # SUBPARSER FOR CHOOSING DIVERSE STRAINS
+    treefile_subparser = subparsers.add_parser('choose_diverse',
+                                               help='For diverse strain choosing if you already have a tree file.',
+                                               parents=[parent_parser])
     treefile_subparser.add_argument('--include_strains',
                                     type=str,
                                     nargs='*',
                                     help='Names of strains that must be chosen. In the event that more than one strain '
                                          'that is from the same cluster is picked, the first strain in the list will '
                                          'take precedence.')
+
+    # SUBPARSER FOR CHOOSING NOT DIVERSE STRAINS
+    neartree_subparser = subparsers.add_parser('choose_similar',
+                                               parents=[parent_parser],
+                                               help='For choosing strains that are closely related if you already '
+                                                    'have a tree file.')
+    neartree_subparser.add_argument('-r', '--reference_strain',
+                                    type=str,
+                                    required=True,
+                                    help='Strain you want to find close relatives of.')
+
     # SUBPARSER FOR TREE CREATION
     tree_creation = subparsers.add_parser('create', help='Create a tree from a set of FASTA sequences.')
     tree_creation.add_argument('arg1')
@@ -365,7 +407,7 @@ def main():
 
     # TODO: Add capability to specify certain strains that must be picked, if possible
     # JUST CHOOSE STRAINS
-    if args.subparsers == 'choose':
+    if args.subparsers == 'choose_diverse':
         if not os.path.isdir(args.output_folder):
             os.makedirs(args.output_folder)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -384,7 +426,28 @@ def main():
                                                                image=output_file,
                                                                name='{} Strains'.format(number),
                                                                clusters=clusters))
-            html_report = os.path.join(args.output_folder, 'StrainChoosr.html')
+            html_report = os.path.join(args.output_folder, 'StrainChoosrDiverse.html')
+            generate_html_report(completed_choosr_list=completed_choosrs,
+                                 output_report=html_report)
+
+    elif args.subparsers == 'choose_similar':
+        if not os.path.isdir(args.output_folder):
+            os.makedirs(args.output_folder)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            st = StrainChoosr(tree_file=args.treefile, tree_mode=args.tree_mode)
+            completed_choosrs = list()
+            for number in args.number:
+                output_file = os.path.join(tmpdir, 'strains_{}.png'.format(number))
+                close_relatives = st.find_closest_relatives(starting_strain=args.reference_strain,
+                                                            num_closest_strains=number)
+                st.create_colored_tree_tip_image(representatives=close_relatives,
+                                                 output_file=output_file,
+                                                 ref=args.reference_strain)
+                completed_choosrs.append(CompletedStrainChoosr(representatives=close_relatives,
+                                                               image=output_file,
+                                                               name='{} Strains'.format(number),
+                                                               clusters=list()))
+            html_report = os.path.join(args.output_folder, 'StrainChoosrClose.html')
             generate_html_report(completed_choosr_list=completed_choosrs,
                                  output_report=html_report)
 
