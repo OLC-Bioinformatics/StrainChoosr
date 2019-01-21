@@ -5,7 +5,6 @@ import os
 import copy
 import base64
 import random
-import shutil
 import logging
 import tempfile
 import argparse
@@ -346,6 +345,7 @@ def generate_html_report(completed_choosr_list, output_report):
 
 
 def main():
+    # PARENT PARSERS FOR CHOOSING DIVERSE/NOT DIVERSE STRAINS
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('-t', '--treefile',
                                type=str,
@@ -365,9 +365,10 @@ def main():
                                choices=['r', 'c'],
                                help='Mode to display output trees in - choose from r for rectangular ' 
                                     'or c for circular. Defaults to rectangular.')
+    # Actual main parser.
     parser = argparse.ArgumentParser(description='StrainChoosr provides a set of tools for choosing the most or '
                                                  'least diverse set of strains from a set of DNA or protein sequences.')
-    subparsers = parser.add_subparsers(help='asdf', dest='subparsers')
+    subparsers = parser.add_subparsers(dest='subparsers')
 
     # SUBPARSER FOR CHOOSING DIVERSE STRAINS
     treefile_subparser = subparsers.add_parser('choose_diverse',
@@ -405,8 +406,7 @@ def main():
                         level=logging.INFO,
                         datefmt='%Y-%m-%d %H:%M:%S')
 
-    # TODO: Add capability to specify certain strains that must be picked, if possible
-    # JUST CHOOSE STRAINS
+    # JUST CHOOSE STRAINS - DIVERSE
     if args.subparsers == 'choose_diverse':
         if not os.path.isdir(args.output_folder):
             os.makedirs(args.output_folder)
@@ -430,6 +430,7 @@ def main():
             generate_html_report(completed_choosr_list=completed_choosrs,
                                  output_report=html_report)
 
+    # JUST CHOOSE STRAINS - CLOSE RELATIVES
     elif args.subparsers == 'choose_similar':
         if not os.path.isdir(args.output_folder):
             os.makedirs(args.output_folder)

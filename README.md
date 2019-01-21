@@ -1,3 +1,6 @@
+[![Build status](https://travis-ci.org/lowandrew/StrainChoosr.svg?master)](https://travis-ci.org/lowandrew)
+
+
 # StrainChoosr
 
 StrainChoosr examines phylogenetic trees and will give you the X strains that represent the most diversity
