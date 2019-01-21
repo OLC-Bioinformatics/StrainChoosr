@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Core python library
+import copy
 import random
 import logging
 import argparse
@@ -110,9 +111,10 @@ class StrainChoosr(object):
         :param representatives: List with each strain name that should be highlighted.
         :param output_file: File to write output to, including extension.
         """
+        tree = copy.deepcopy(self.tree)  # Don't want to actually modify original tree.
         ts = TreeStyle()
         ts.show_leaf_name = False
-        for terminal_clade in self.terminal_clades:
+        for terminal_clade in tree.get_leaves():
             if terminal_clade.name in representatives:
                 nstyle = NodeStyle()
                 nstyle['shape'] = 'circle'
@@ -125,26 +127,33 @@ class StrainChoosr(object):
                 name_face = TextFace(terminal_clade.name, fgcolor='black', fsize=8)
                 terminal_clade.add_face(name_face, column=0)
 
-        self.tree.ladderize()
-        self.tree.render(output_file, dpi=300, tree_style=ts)
+        tree.ladderize()
+        tree.render(output_file, dpi=300, tree_style=ts)
 
-    def find_common_ancestor_and_descendants(self, cluster):
+    @staticmethod
+    def find_common_ancestor_and_descendants(tree, cluster):
         nodes = list()
-        for terminal in self.terminal_clades:
+        for terminal in tree.get_leaves():
             if terminal.name in cluster:
                 nodes.append(terminal)
         if len(nodes) == 1:
             return nodes[0]
         common_ancestor = nodes[0].get_common_ancestor(nodes[1:])
-        print(nodes[0])
         descendants = common_ancestor.get_descendants()
-        descendants.append(common_ancestor)
+        descendants.append(common_ancestor)  # Have to include this so that ancestor actually ends up colored.
+        descendants.append(nodes[0])  # This doesn't get included in the get_descendants? I may have misunderstood docs
+        # Check that the root of the tree isn't actually in the list - if it is, the whole tree ends up colored
+        # one color, which is not at all what we want.
+        root = tree.get_tree_root()
+        if root in descendants:
+            descendants.remove(root)
         return descendants
 
-    def draw_clustered_tree(self, clusters):
+    def draw_clustered_tree(self, clusters, output_file):
+        tree = copy.deepcopy(self.tree)
         common_ancestor_groups = list()
         for cluster in clusters:
-            common_ancestor_groups.append(self.find_common_ancestor_and_descendants(cluster))
+            common_ancestor_groups.append(self.find_common_ancestor_and_descendants(tree, cluster))
         for common_ancestor_group in common_ancestor_groups:
             group_color = random_color()
             nstyle = NodeStyle()
@@ -153,36 +162,62 @@ class StrainChoosr(object):
             nstyle['fgcolor'] = group_color
             for node in common_ancestor_group:
                 node.set_style(nstyle)
+        tree.ladderize()
+        if output_file is not None:
+            tree.render(output_file, dpi=300)
+        return tree
+
+    def draw_clusters_and_tips(self, clusters, output_file, representatives):
+        tree = self.draw_clustered_tree(clusters=clusters, output_file=None)
         ts = TreeStyle()
         ts.show_leaf_name = False
-        self.tree.show(tree_style=ts)
+        for terminal_clade in tree.get_leaves():
+            if terminal_clade.name in representatives:
+                nstyle = NodeStyle()
+                nstyle['shape'] = 'circle'
+                nstyle['fgcolor'] = 'red'
+                nstyle['size'] = 10
+                name_face = TextFace(terminal_clade.name, fgcolor='red', fsize=10)
+                terminal_clade.add_face(name_face, column=0)
+                terminal_clade.set_style(nstyle)
+            else:
+                name_face = TextFace(terminal_clade.name, fgcolor='black', fsize=8)
+                terminal_clade.add_face(name_face, column=0)
+        tree.render(output_file, dpi=300, tree_style=ts)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-t', '--treefile',
-                        type=str,
-                        required=True,
-                        help='Path to treefile, in newick format.')
-    parser.add_argument('-n', '--number',
-                        type=int,
-                        required=True,
-                        help='Number of representatives wanted.')
+    parser = argparse.ArgumentParser(description='StrainChoosr provides a set of tools for choosing the most diverse '
+                                                 'set of strains from a set of DNA sequences or protein sequences.')
+    subparsers = parser.add_subparsers(help='asdf', dest='subparsers')
+    treefile_subparser = subparsers.add_parser('choose', help='For strain choosing if you already have a tree file.')
+    treefile_subparser.add_argument('-t', '--treefile',
+                                    type=str,
+                                    required=True,
+                                    help='Path to treefile, in newick format.')
+    treefile_subparser.add_argument('-n', '--number',
+                                    type=int,
+                                    required=True,
+                                    help='Number of representatives wanted.')
+    tree_creation = subparsers.add_parser('tree_create', help='Create a tree from a set of FASTA sequences.')
+    tree_creation.add_argument('arg1')
     args = parser.parse_args()
     logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                         level=logging.INFO,
                         datefmt='%Y-%m-%d %H:%M:%S')
-    diversitree = StrainChoosr(tree_file=args.treefile)
-    linkage = diversitree.create_linkage()
-    clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=args.number)
-    print(clusters)
-    reps = list()
-    for cluster in clusters:
-        rep = diversitree.choose_best_representative(cluster, method='closest')
-        reps.append(rep)
-
-    diversitree.create_colored_tree_tip_image(representatives=reps, output_file='test.png')
-    diversitree.draw_clustered_tree(clusters)
+    if args.subparsers == 'choose':
+        diversitree = StrainChoosr(tree_file=args.treefile)
+        linkage = diversitree.create_linkage()
+        clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=args.number)
+        reps = list()
+        for cluster in clusters:
+            rep = diversitree.choose_best_representative(cluster, method='closest')
+            reps.append(rep)
+        diversitree.create_colored_tree_tip_image(representatives=reps, output_file='test.png')
+        diversitree.draw_clustered_tree(clusters, output_file='test2.png')
+        diversitree.draw_clusters_and_tips(clusters=clusters, output_file='test3.png', representatives=reps)
+    elif args.subparsers == 'tree_create':
+        print('Create tree ')
 
 
 if __name__ == '__main__':
