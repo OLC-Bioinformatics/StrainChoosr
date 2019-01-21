@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Core python library
+import random
 import logging
 import argparse
 
@@ -8,6 +9,10 @@ import argparse
 import ete3
 from ete3 import NodeStyle, TreeStyle, TextFace
 from scipy.cluster import hierarchy
+
+
+def random_color():
+    return '#' + ''.join([random.choice('0123456789ABCDEF') for j in range(6)])
 
 
 class StrainChoosr(object):
@@ -102,8 +107,8 @@ class StrainChoosr(object):
         """
         Given a list of representatives, shows (for now) a phylogeny that has those representatives highlighted in
         a color to show it off.
-        :param representatives: List with each strain name that has the
-        :return:
+        :param representatives: List with each strain name that should be highlighted.
+        :param output_file: File to write output to, including extension.
         """
         ts = TreeStyle()
         ts.show_leaf_name = False
@@ -123,6 +128,35 @@ class StrainChoosr(object):
         self.tree.ladderize()
         self.tree.render(output_file, dpi=300, tree_style=ts)
 
+    def find_common_ancestor_and_descendants(self, cluster):
+        nodes = list()
+        for terminal in self.terminal_clades:
+            if terminal.name in cluster:
+                nodes.append(terminal)
+        if len(nodes) == 1:
+            return nodes[0]
+        common_ancestor = nodes[0].get_common_ancestor(nodes[1:])
+        print(nodes[0])
+        descendants = common_ancestor.get_descendants()
+        descendants.append(common_ancestor)
+        return descendants
+
+    def draw_clustered_tree(self, clusters):
+        common_ancestor_groups = list()
+        for cluster in clusters:
+            common_ancestor_groups.append(self.find_common_ancestor_and_descendants(cluster))
+        for common_ancestor_group in common_ancestor_groups:
+            group_color = random_color()
+            nstyle = NodeStyle()
+            nstyle['hz_line_color'] = group_color
+            nstyle['vt_line_color'] = group_color
+            nstyle['fgcolor'] = group_color
+            for node in common_ancestor_group:
+                node.set_style(nstyle)
+        ts = TreeStyle()
+        ts.show_leaf_name = False
+        self.tree.show(tree_style=ts)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -141,12 +175,14 @@ def main():
     diversitree = StrainChoosr(tree_file=args.treefile)
     linkage = diversitree.create_linkage()
     clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=args.number)
+    print(clusters)
     reps = list()
     for cluster in clusters:
         rep = diversitree.choose_best_representative(cluster, method='closest')
         reps.append(rep)
 
     diversitree.create_colored_tree_tip_image(representatives=reps, output_file='test.png')
+    diversitree.draw_clustered_tree(clusters)
 
 
 if __name__ == '__main__':
