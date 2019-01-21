@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 
 # Core python library
+import os
 import copy
+import base64
 import random
 import logging
+import tempfile
 import argparse
 
 # Other stuff
@@ -186,10 +189,108 @@ class StrainChoosr(object):
         tree.render(output_file, dpi=300, tree_style=ts)
 
 
+class CompletedStrainChoosr:
+    def __init__(self, representatives, image, name):
+        self.representatives = representatives
+        self.image = image
+        self.name = name
+
+
+def generate_html_report(completed_choosr_list, output_report):
+    style = """
+    <style>
+    body {font-family: Arial;}
+
+    /* Style the tab */
+    .tab {
+      overflow: hidden;
+      border: 1px solid #ccc;
+      background-color: #f1f1f1;
+    }
+
+    /* Style the buttons inside the tab */
+    .tab button {
+      background-color: inherit;
+      float: left;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 14px 16px;
+      transition: 0.3s;
+      font-size: 17px;
+    }
+
+    /* Change background color of buttons on hover */
+    .tab button:hover {
+      background-color: #ddd;
+    }
+
+    /* Create an active/current tablink class */
+    .tab button.active {
+      background-color: #ccc;
+    }
+
+    /* Style the tab content */
+    .tabcontent {
+      display: none;
+      padding: 6px 12px;
+      border: 1px solid #ccc;
+      border-top: none;
+    }
+    </style>
+    """
+
+    javascript = """
+    <script>
+    function openCity(evt, cityName) {
+      var i, tabcontent, tablinks;
+      tabcontent = document.getElementsByClassName("tabcontent");
+      for (i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+      }
+      tablinks = document.getElementsByClassName("tablinks");
+      for (i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+      }
+      document.getElementById(cityName).style.display = "block";
+      evt.currentTarget.className += " active";
+    }
+    </script>
+    """
+    html_content = list()
+    html_content.append('<html><head>')
+    html_content.append(style)
+    html_content.append('</head><body>')
+    html_content.append('<h1>StrainChoosr Report</h1><br>')
+
+    html_content.append('<div class="tab">\n')
+    for completed_choosr in completed_choosr_list:
+        html_content.append('<button class="tablinks" onclick="openCity(event, \'{name}\')">{name}</button>'.format(name=completed_choosr.name))
+    html_content.append('</div>')
+    for completed_choosr in completed_choosr_list:
+        html_content.append('<div id="{name}" class="tabcontent">'.format(name=completed_choosr.name))
+        html_content.append('<h4>{}</h4><br>'.format(completed_choosr.name))
+        with open(completed_choosr.image, 'rb') as image_file:
+            base64_string = base64.b64encode(image_file.read()).decode('utf-8')
+        html_content.append('<img src="data:image/png;base64,{}">'.format(base64_string))
+        html_content.append('<br><h4>Chosen Strains</h4>')
+        for strain in completed_choosr.representatives:
+            html_content.append('<p>{}</p>'.format(strain))
+        html_content.append('</div>')
+
+    html_content.append(javascript)
+    html_content.append('</body></html>')
+    html_string = '\n'.join(html_content)
+    with open(output_report, 'w') as f:
+        f.write(html_string)
+
+
 def main():
     parser = argparse.ArgumentParser(description='StrainChoosr provides a set of tools for choosing the most diverse '
                                                  'set of strains from a set of DNA sequences or protein sequences.')
     subparsers = parser.add_subparsers(help='asdf', dest='subparsers')
+
+    # SUBPARSER FOR TREE GENERATION
     treefile_subparser = subparsers.add_parser('choose', help='For strain choosing if you already have a tree file.')
     treefile_subparser.add_argument('-t', '--treefile',
                                     type=str,
@@ -197,27 +298,56 @@ def main():
                                     help='Path to treefile, in newick format.')
     treefile_subparser.add_argument('-n', '--number',
                                     type=int,
+                                    nargs='+',
                                     required=True,
                                     help='Number of representatives wanted.')
+    treefile_subparser.add_argument('-o', '--output_folder',
+                                    type=str,
+                                    required=True,
+                                    help='Output folder to store results of StrainChoosr.')
+
+    # SUBPARSER FOR TREE CREATION
     tree_creation = subparsers.add_parser('tree_create', help='Create a tree from a set of FASTA sequences.')
     tree_creation.add_argument('arg1')
+
+    #$ SUBPARSER FOR CREATION AND CHOOSING
+    create_and_choose = subparsers.add_parser('create_and_choose', help='Both creates a tree and chooses strains '
+                                                                        'from the tree created.')
+    create_and_choose.add_argument('asdf')
+
+    # Actually start doing things.
     args = parser.parse_args()
     logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                         level=logging.INFO,
                         datefmt='%Y-%m-%d %H:%M:%S')
+    # JUST CHOOSE STRAINS
     if args.subparsers == 'choose':
-        diversitree = StrainChoosr(tree_file=args.treefile)
-        linkage = diversitree.create_linkage()
-        clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=args.number)
-        reps = list()
-        for cluster in clusters:
-            rep = diversitree.choose_best_representative(cluster, method='closest')
-            reps.append(rep)
-        diversitree.create_colored_tree_tip_image(representatives=reps, output_file='test.png')
-        diversitree.draw_clustered_tree(clusters, output_file='test2.png')
-        diversitree.draw_clusters_and_tips(clusters=clusters, output_file='test3.png', representatives=reps)
+        if not os.path.isdir(args.output_folder):
+            os.makedirs(args.output_folder)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            completed_choosrs = list()
+            diversitree = StrainChoosr(tree_file=args.treefile)
+            linkage = diversitree.create_linkage()
+            for number in args.number:
+                clusters = diversitree.find_clusters(linkage=linkage, desired_clusters=number)
+                reps = list()
+                for cluster in clusters:
+                    rep = diversitree.choose_best_representative(cluster, method='closest')
+                    reps.append(rep)
+                output_file = os.path.join(tmpdir, 'strains_{}.png'.format(number))
+                diversitree.draw_clusters_and_tips(clusters=clusters, output_file=output_file, representatives=reps)
+                completed_choosrs.append(CompletedStrainChoosr(representatives=reps,
+                                                               image=output_file,
+                                                               name='{} Strains'.format(number)))
+            html_report = os.path.join(args.output_folder, 'StrainChoosr.html')
+            generate_html_report(completed_choosr_list=completed_choosrs,
+                                 output_report=html_report)
+
+    # JUST CREATE A TREE
     elif args.subparsers == 'tree_create':
         print('Create tree ')
+
+    # CREATE A TREE AND CHOOSE STRAINS
 
 
 if __name__ == '__main__':
