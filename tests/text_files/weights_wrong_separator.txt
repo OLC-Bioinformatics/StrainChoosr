@@ -1,0 +1,2 @@
+strain1,2.3
+strain2,3.6

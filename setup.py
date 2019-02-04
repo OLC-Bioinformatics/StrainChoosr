@@ -14,10 +14,8 @@ setup(
     author='Andrew Low',
     author_email='andrew.low@canada.ca',
     url='https://github.com/lowandrew/StrainChoosr',
-    install_requires=['scipy',
-                      'pytest',
+    install_requires=['pytest',
                       'ete3',
                       'PyQt5',  # Apparently required by ete3 for visualisation, but not listed in that setup.py...
-                      'biopython',
                       ]
 )

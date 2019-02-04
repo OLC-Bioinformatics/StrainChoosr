@@ -1,0 +1,2 @@
+strain1	a
+strain2	3.6
