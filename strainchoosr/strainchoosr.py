@@ -86,7 +86,8 @@ def find_next_leaf(diverse_leaves, tree):
             leafset.append(leaf)
             sets_to_try[leaf.name] = leafset
 
-    for leafname in sets_to_try:
+    # In the event multiple strains have same distance, sort the keys so we're consistent about which one we're taking
+    for leafname in sorted(sets_to_try):
         total_branch_length = 0
         newtree = tree.copy()
         newtree.prune(get_leaf_names_from_nodes(sets_to_try[leafname]), preserve_branch_length=True)

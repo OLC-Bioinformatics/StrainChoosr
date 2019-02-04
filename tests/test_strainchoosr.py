@@ -158,4 +158,4 @@ def test_pd_greedy():
     assert '2018-SEQ-0383.fasta' in names
     assert '2018-SEQ-0100.fasta' in names
     assert '2018-SEQ-0385.fasta' in names
-    assert '2018-SEQ-0559.fasta' in names
+    assert '2017-MER-0763.fasta' in names
