@@ -4,6 +4,9 @@ python:
   - '3.6'
 cache: pip
 
+services:
+  - xfvb
+
 install:
   - pip install -e .
 branches:
@@ -12,4 +15,5 @@ branches:
 
 script:
   - pytest tests
+  # Run a few integration tests here - make sure they don't fail.
   - strainchoosr -t tests/tree_files/tree.nwk -n 4 6 8 10
