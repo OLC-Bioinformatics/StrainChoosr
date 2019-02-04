@@ -100,8 +100,6 @@ def find_next_leaf(diverse_leaves, tree):
 
 
 def pd_greedy(treefile, number_tips, starting_strains):
-    # TODO here: implement greedy algorithm described in Species Choice for Comparative Genomics: Being Greedy Works
-    #  (Pardi 2005), as well as the Steel 2005 paper
     # My understanding of this algorithm - start out by picking the two strains that have the longest total length
     # between them in the tree.
     # From there, add the leaf that adds the most total branch length to the tree, then just keep doing that until
@@ -151,8 +149,10 @@ def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, co
     a color to show it off.
     :param tree_to_draw: an ete3 Tree object. This won't get modified at any point.
     :param representatives: List with each strain name that should be highlighted.
-    :param output_file: File to write output to, including extension.
-    :param color: Color to show selected strains as. Defaults to red.
+    :param output_file: File to write output to, including extension. Tested with .png and .pdf so far, not sure what
+    others work
+    :param color: Color to show selected strains as. Defaults to red. Other choices available can be found at
+    http://etetoolkit.org/docs/latest/reference/reference_treeview.html#ete3.SVG_COLORS
     """
     tree = copy.deepcopy(tree_to_draw)  # Don't want to actually modify original tree.
     ts = TreeStyle()
@@ -355,9 +355,19 @@ def main():
     # Now actually do stuff here!
     tree = ete3.Tree(args.treefile)
     starting_leaves = find_starting_leaves(tree, args.starting_strains)
-    for number in args.number:
-        strains = pd_greedy(args.treefile, number, starting_leaves)
-        print(strains)
+    completed_choosrs = list()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for number in args.number:
+            strains = pd_greedy(args.treefile, number, starting_leaves)
+            output_image = os.path.join(tmpdir, 'strains_{}.png'.format(number))
+            create_colored_tree_tip_image(tree_to_draw=tree,
+                                          output_file=output_image,
+                                          representatives=get_leaf_names_from_nodes(strains))
+            completed_choosrs.append(CompletedStrainChoosr(representatives=get_leaf_names_from_nodes(strains),
+                                                           image=output_image,
+                                                           name='{} Strains'.format(number)))
+        generate_html_report(completed_choosrs,
+                             args.output_name + '.html')
 
 
 if __name__ == '__main__':

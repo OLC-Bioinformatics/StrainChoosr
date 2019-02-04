@@ -12,3 +12,4 @@ branches:
 
 script:
   - pytest tests
+  - strainchoosr -t tests/tree_files/tree.nwk -n 4 6 8 10

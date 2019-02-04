@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import pytest
+import tempfile
 import ete3
+import os
 from strainchoosr.strainchoosr import *
 
 
@@ -159,3 +161,47 @@ def test_pd_greedy():
     assert '2018-SEQ-0100.fasta' in names
     assert '2018-SEQ-0385.fasta' in names
     assert '2017-MER-0763.fasta' in names
+
+
+def test_tree_draw():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tree = ete3.Tree('tests/tree_files/tree.nwk')
+        representatives = ['2018-SEQ-0383.fasta', '2018-SEQ-0100.fasta', '2018-SEQ-0385.fasta', '2017-MER-0763.fasta']
+        output_file = os.path.join(tmpdir, 'tree.png')
+        create_colored_tree_tip_image(tree, representatives, output_file)
+        assert os.path.isfile(output_file)
+
+
+def test_tree_draw_pdf():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tree = ete3.Tree('tests/tree_files/tree.nwk')
+        representatives = ['2018-SEQ-0383.fasta', '2018-SEQ-0100.fasta', '2018-SEQ-0385.fasta', '2017-MER-0763.fasta']
+        output_file = os.path.join(tmpdir, 'tree.pdf')
+        create_colored_tree_tip_image(tree, representatives, output_file)
+        assert os.path.isfile(output_file)
+
+
+def test_tree_draw_alternate_color():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tree = ete3.Tree('tests/tree_files/tree.nwk')
+        representatives = ['2018-SEQ-0383.fasta', '2018-SEQ-0100.fasta', '2018-SEQ-0385.fasta', '2017-MER-0763.fasta']
+        output_file = os.path.join(tmpdir, 'tree.png')
+        create_colored_tree_tip_image(tree, representatives, output_file, color='lavender')
+        assert os.path.isfile(output_file)
+
+
+def test_html_report_generation():
+    completed_choosrs = list()
+    number = 4
+    tree = ete3.Tree('tests/tree_files/tree.nwk')
+    with tempfile.TemporaryDirectory() as tmpdir:
+        representatives = ['2018-SEQ-0383.fasta', '2018-SEQ-0100.fasta', '2018-SEQ-0385.fasta', '2017-MER-0763.fasta']
+        output_image = os.path.join(tmpdir, 'strains_{}.png'.format(number))
+        create_colored_tree_tip_image(tree_to_draw=tree,
+                                      output_file=output_image,
+                                      representatives=representatives)
+        completed_choosrs.append(CompletedStrainChoosr(representatives,
+                                                       image=output_image,
+                                                       name='{} Strains'.format(number)))
+        generate_html_report(completed_choosrs,
+                             os.path.join(tmpdir, 'strainchoosr_report.html'))
