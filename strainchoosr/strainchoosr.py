@@ -13,31 +13,64 @@ import ete3
 from ete3 import NodeStyle, TreeStyle, TextFace
 
 
-def two_most_distant_leaves(tree, leaves):
+def find_starting_leaves(tree, starting_leaf_list):
+    """
+    Gets the start of what the most diverse set of strains should be.
+    If starting_leaf_list has nothing in it, the two strains that are the farthest apart will be picked (longest total
+    branch length between them). If there is one entry in starting leaf list, the list returned will be that leaf plus
+    whatever leaf on the tree is the farthest from it. If more than two leaves are in starting_leaf_list, nothing
+    happens and just that will get returned.
+    :param tree: An ete3.Tree object
+    :param starting_leaf_list: A list of ete3.TreeNode objects.
+    :return: A list of ete3.TreeNode objects representing the most diverse starting set possible
+    """
+    if len(starting_leaf_list) == 0:
+        leaves = tree.get_leaves()
+        max_distance = 0
+        most_distant_leaves = None, None
+        for leaf_one in leaves:
+            for leaf_two in leaves:
+                distance = tree.get_distance(leaf_one, leaf_two)
+                if distance > max_distance:
+                    max_distance = distance
+                    most_distant_leaves = leaf_one, leaf_two
+        starting_leaf_list.append(most_distant_leaves[0])
+        starting_leaf_list.append(most_distant_leaves[1])
+    elif len(starting_leaf_list) == 1:
+        leaves = tree.get_leaves()
+        max_distance = 0
+        most_distant_leaf = None
+        starting_leaf = starting_leaf_list[0]
+        for leaf in leaves:
+            if leaf.name != starting_leaf:
+                distance = tree.get_distance(leaf, starting_leaf)
+                if distance > max_distance:
+                    most_distant_leaf = leaf
+                    max_distance = distance
+        starting_leaf_list.append(most_distant_leaf)
+
+    return starting_leaf_list
+
+
+def get_leaf_names_from_nodes(leaf_nodes):
     """
 
-    :param tree:
-    :param leaves:
+    :param leaf_nodes:
     :return:
     """
-    max_distance = 0
-    most_distant_leaves = None, None
-    for leaf_one in leaves:
-        for leaf_two in leaves:
-            distance = tree.get_distance(leaf_one, leaf_two)
-            if distance > max_distance:
-                max_distance = distance
-                most_distant_leaves = leaf_one, leaf_two
-    return most_distant_leaves
+    leaf_names = list()
+    for node in leaf_nodes:
+        leaf_names.append(node.name)
+    return leaf_names
 
 
-def find_next_leaf(diverse_leaves, tree, leaves):
+def find_next_leaf(diverse_leaves, tree):
     """
     Given a set of leaves we've already decided represent the most diversity, find the next leaf that contributes
     the most diversity.
-    :param diverse_leaves:
-    :param tree:
-    :param leaves:
+    :param diverse_leaves: List of leaves that we've already decided represent the most diversity possible - each
+    entry in this list should be an ete3.TreeNode object
+    :param tree: an ete3.Tree object that contains the nodes listed in diverse_leaves
     :return:
     """
     # Here, we prune off everything except for the leaves we've already selected as diverse and one other leaf in the tree
@@ -45,25 +78,27 @@ def find_next_leaf(diverse_leaves, tree, leaves):
     # total branch length, and return that.
     longest_total_branch_length = 0
     sets_to_try = dict()
+    leaves = tree.get_leaves()
     leaf_to_return = None
     for leaf in leaves:
         if leaf not in diverse_leaves:
             leafset = diverse_leaves.copy()
-            leafset.append(leaf.name)
+            leafset.append(leaf)
             sets_to_try[leaf.name] = leafset
 
     for leafname in sets_to_try:
         total_branch_length = 0
         newtree = tree.copy()
-        newtree.prune(sets_to_try[leafname], preserve_branch_length=True)
+        newtree.prune(get_leaf_names_from_nodes(sets_to_try[leafname]), preserve_branch_length=True)
         for branch in newtree.get_descendants():
             total_branch_length += branch.dist
         if total_branch_length > longest_total_branch_length:
-            leaf_to_return = tree.get_leaves_by_name(leafname)
-    return leaf_to_return[0].name
+            leaf_to_return = tree.get_leaves_by_name(leafname)[0]
+            longest_total_branch_length = total_branch_length
+    return leaf_to_return
 
 
-def pd_greedy(treefile, number_tips):
+def pd_greedy(treefile, number_tips, starting_strains):
     # TODO here: implement greedy algorithm described in Species Choice for Comparative Genomics: Being Greedy Works
     #  (Pardi 2005), as well as the Steel 2005 paper
     # My understanding of this algorithm - start out by picking the two strains that have the longest total length
@@ -72,40 +107,41 @@ def pd_greedy(treefile, number_tips):
     # you hit the number of strains you want.
     # To actually implement this, should just be able to have all strains but the ones in your tree pruned from the
     # original, and calculate total branch length after that.
-    diverse_leaves = list()
     # Step 1: Read in ye olde treefile, figure out which nodes within tree structure are leaves.
     tree = ete3.Tree(newick=treefile)
-    leaves = tree.get_leaves()
 
     # Step 2: Find the two terminals with the most distance between them.
-    distant_one, distant_two = two_most_distant_leaves(tree, leaves)
+    starting_strains = find_starting_leaves(tree, starting_strains)
 
-    if distant_one is None or distant_two is None:  # TODO: Check that this is what happens if tree doesn't have branch lengths
-        # This is not what happens when tree has
-        logging.error('ERROR: Could not compute most distant leaves. Make sure your tree includes branch lengths.')
-        quit(code=1)
-
-    diverse_leaves.append(distant_one.name)
-    diverse_leaves.append(distant_two.name)
-    while len(diverse_leaves) < number_tips:
-        next_leaf = find_next_leaf(diverse_leaves, tree, leaves)
+    while len(starting_strains) < number_tips:
+        next_leaf = find_next_leaf(starting_strains, tree)
         if next_leaf is None:
             logging.error('ERROR: Could not find the next leaf to add.')
             quit(code=1)
-        diverse_leaves.append(next_leaf)
-    return diverse_leaves
+        starting_strains.append(next_leaf)
+    return starting_strains
 
 
-def modify_tree_with_weights(input_treefile, weights):
+def modify_tree_with_weights(tree, weights):
     """
-
-    :param input_treefile:
-    :param weights:
-    :return:
+    Given an ete3 Tree object and a dictionary where keys are node names in the tree and values are multipliers (can
+    be generated with read_weights_file), returns a new tree where each branch in the weights dictionary is multiplied
+    by the multiplier specified.
+    :param tree: an ete3.Tree object
+    :param weights: Dictionary where keys are names of nodes/tips in the tree, and values are weights by which branch
+    lengths will be multiplied
+    :return: A new ete3.Tree where branch lengths have been modified.
     """
-    tree = ete3.Tree(newick=input_treefile)
-    return tree
-
+    newtree = copy.deepcopy(tree)
+    for node in weights:
+        # Make sure that we can actually find the node, and that more than one branch doesn't have the same name.
+        branch = newtree.get_leaves_by_name(node)
+        if len(branch) != 1:
+            raise AttributeError('The branch {} either could not be found in your tree or was found more than once. '
+                                 'Please verify your tree/weights dictionary and try again.'.format(node))
+        else:
+            branch[0].dist *= weights[node]
+    return newtree
 
 
 def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, color='red'):
@@ -291,7 +327,7 @@ def main():
                              'leaf names in the first column and weights in the second. Leaves not listed will be '
                              'assigned a weight of 1.')
     parser.add_argument('--starting_strains',
-                        type=str,
+                        default=list(),
                         nargs='+',
                         help='Names of strains that must be included in your set of diverse strains, separated by '
                              'spaces.')
@@ -316,6 +352,11 @@ def main():
                             level=logging.WARNING,
                             datefmt='%Y-%m-%d %H:%M:%S')
     # Now actually do stuff here!
+    tree = ete3.Tree(args.treefile)
+    starting_leaves = find_starting_leaves(tree, args.starting_strains)
+    for number in args.number:
+        strains = pd_greedy(args.treefile, number, starting_leaves)
+        print(strains)
 
 
 if __name__ == '__main__':
