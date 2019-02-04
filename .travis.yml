@@ -5,7 +5,7 @@ python:
 cache: pip
 
 services:
-  - xfvb
+  - xvfb
 
 install:
   - pip install -e .
