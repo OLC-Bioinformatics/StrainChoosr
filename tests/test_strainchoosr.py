@@ -4,6 +4,7 @@ import pytest
 import tempfile
 import ete3
 import os
+from unittest.mock import patch
 from strainchoosr.strainchoosr import *
 
 
@@ -142,6 +143,24 @@ def test_leaf_names_from_nodes():
     assert '2018-SEQ-1315.fasta' in names
 
 
+def test_leaf_nodes_from_names():
+    tree = ete3.Tree('tests/tree_files/tree.nwk')
+    tree_nodes = get_leaf_nodes_from_names(tree, ['2018-SEQ-0559.fasta', '2018-SEQ-1315.fasta'])
+    assert len(tree_nodes) == 2
+
+
+def test_leaf_nodes_from_names_bad_name():
+    tree = ete3.Tree('tests/tree_files/tree.nwk')
+    with pytest.raises(RuntimeError):
+        tree_nodes = get_leaf_nodes_from_names(tree, ['2018-SEQ-0559.fasta', 'super_fake_leaf'])
+
+
+def test_get_version():
+    # Todo: this test stinks. Make it more useful
+    version = get_version()
+    assert 'StrainChoosr' in version
+
+
 def test_find_next_leaf():
     tree = ete3.Tree('tests/tree_files/tree.nwk')
     starting_leaf_list = list()
@@ -154,7 +173,7 @@ def test_pd_greedy():
     tree = ete3.Tree('tests/tree_files/tree.nwk')
     starting_leaf_list = list()
     starting_leaves = find_starting_leaves(tree, starting_leaf_list)
-    strains = pd_greedy('tests/tree_files/tree.nwk', 4, starting_leaves)
+    strains = pd_greedy(tree, 4, starting_leaves)
     assert len(strains) == 4
     names = get_leaf_names_from_nodes(strains)
     assert '2018-SEQ-0383.fasta' in names
@@ -190,6 +209,15 @@ def test_tree_draw_alternate_color():
         assert os.path.isfile(output_file)
 
 
+def test_tree_draw_alternate_shape():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tree = ete3.Tree('tests/tree_files/tree.nwk')
+        representatives = ['2018-SEQ-0383.fasta', '2018-SEQ-0100.fasta', '2018-SEQ-0385.fasta', '2017-MER-0763.fasta']
+        output_file = os.path.join(tmpdir, 'tree.png')
+        create_colored_tree_tip_image(tree, representatives, output_file, mode='c')
+        assert os.path.isfile(output_file)
+
+
 def test_html_report_generation():
     completed_choosrs = list()
     number = 4
@@ -205,3 +233,79 @@ def test_html_report_generation():
                                                        name='{} Strains'.format(number)))
         generate_html_report(completed_choosrs,
                              os.path.join(tmpdir, 'strainchoosr_report.html'))
+
+
+def test_argument_parsing_mostly_defaults():
+    args = argument_parsing(['-t', 'tests/tree_files/tree.nwk', '-n', '5', '10', '20'])
+    assert args.treefile == 'tests/tree_files/tree.nwk'
+    assert args.number == [5, 10, 20]
+    assert args.output_name == 'strainchoosr_output'
+    assert args.tree_mode == 'r'
+    assert args.weight_file is None
+    assert args.starting_strains == []
+    assert args.verbosity == 'info'
+
+
+def test_argument_parsing_starting_strains():
+    args = argument_parsing(['-t', 'tests/tree_files/tree.nwk', '-n', '5', '10', '20',
+                             '--starting_strains', '2018-SEQ-0100.fasta'])
+    assert args.treefile == 'tests/tree_files/tree.nwk'
+    assert args.number == [5, 10, 20]
+    assert args.output_name == 'strainchoosr_output'
+    assert args.tree_mode == 'r'
+    assert args.weight_file is None
+    assert args.starting_strains == ['2018-SEQ-0100.fasta']
+    assert args.verbosity == 'info'
+
+
+def test_run_strainchoosr():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        run_strainchoosr(treefile='tests/tree_files/tree.nwk',
+                         number_representatives=[5, 10],
+                         output_name=os.path.join(tmpdir, 'st_report'))
+        assert os.path.isfile(os.path.join(tmpdir, 'st_report.html'))
+
+
+def test_run_strainchoosr_weights_file():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        run_strainchoosr(treefile='tests/tree_files/tree.nwk',
+                         number_representatives=[5, 10],
+                         output_name=os.path.join(tmpdir, 'st_report'),
+                         weight_file='tests/text_files/weights.txt')
+        assert os.path.isfile(os.path.join(tmpdir, 'st_report.html'))
+
+
+def test_run_strainchoosr_debug_log():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        run_strainchoosr(treefile='tests/tree_files/tree.nwk',
+                         number_representatives=[5, 10],
+                         output_name=os.path.join(tmpdir, 'st_report'),
+                         verbosity='debug')
+        assert os.path.isfile(os.path.join(tmpdir, 'st_report.html'))
+
+
+def test_run_strainchoosr_warning_log():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        run_strainchoosr(treefile='tests/tree_files/tree.nwk',
+                         number_representatives=[5, 10],
+                         output_name=os.path.join(tmpdir, 'st_report'),
+                         verbosity='warning')
+        assert os.path.isfile(os.path.join(tmpdir, 'st_report.html'))
+
+
+def test_completed_choosr_object():
+    asdf = CompletedStrainChoosr(name='asdf',
+                                 image='asdf.png',
+                                 representatives=['asdf', 'fdsa'])
+    assert asdf.name == 'asdf'
+    assert asdf.image == 'asdf.png'
+    assert asdf.representatives == ['asdf', 'fdsa']
+
+
+def test_main():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_stuff = os.path.join(tmpdir, 'st_output')
+        fake_args = ['strainchoosr', '-t', 'tests/tree_files/tree.nwk', '-n', '5', '-o', output_stuff]
+        with patch('sys.argv', fake_args):
+            main()
+            assert os.path.isfile(output_stuff + '.html')

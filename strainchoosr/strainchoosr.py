@@ -2,15 +2,28 @@
 
 # Core python library
 import os
+import sys
 import copy
 import base64
 import logging
 import tempfile
 import argparse
+import pkg_resources
 
 # Other stuff
 import ete3
 from ete3 import NodeStyle, TreeStyle, TextFace
+
+# TODO: Handle trees with no branch lengths
+# TODO: Check that number of strains requested/started with isn't more than tree has
+
+
+def get_version():
+    try:
+        version = 'StrainChoosr {}'.format(pkg_resources.get_distribution('strainchoosr').version)
+    except pkg_resources.DistributionNotFound:
+        version = 'StrainChoosr (Unknown version)'
+    return version
 
 
 def find_starting_leaves(tree, starting_leaf_list):
@@ -54,7 +67,7 @@ def find_starting_leaves(tree, starting_leaf_list):
 
 def get_leaf_names_from_nodes(leaf_nodes):
     """
-
+    TODO: This
     :param leaf_nodes:
     :return:
     """
@@ -62,6 +75,24 @@ def get_leaf_names_from_nodes(leaf_nodes):
     for node in leaf_nodes:
         leaf_names.append(node.name)
     return leaf_names
+
+
+def get_leaf_nodes_from_names(tree, leaf_names):
+    """
+    TODO: this
+    :param tree:
+    :param leaf_names:
+    :return:
+    """
+    leaf_nodes = list()
+    for leaf_name in leaf_names:
+        try:
+            leaf_nodes.append(tree.get_leaves_by_name(leaf_name)[0])
+        except IndexError:
+            raise RuntimeError('One of the leaves you specified could not be found in the treefile provided. '
+                               'Leaf name was {}. Please check that your treefile contains that '
+                               'leaf.'.format(leaf_name))
+    return leaf_nodes
 
 
 def find_next_leaf(diverse_leaves, tree):
@@ -99,24 +130,26 @@ def find_next_leaf(diverse_leaves, tree):
     return leaf_to_return
 
 
-def pd_greedy(treefile, number_tips, starting_strains):
+def pd_greedy(tree, number_tips, starting_strains):
+    """
+
+    :param tree:
+    :param number_tips:
+    :param starting_strains:
+    :return:
+    """
     # My understanding of this algorithm - start out by picking the two strains that have the longest total length
     # between them in the tree.
     # From there, add the leaf that adds the most total branch length to the tree, then just keep doing that until
     # you hit the number of strains you want.
     # To actually implement this, should just be able to have all strains but the ones in your tree pruned from the
     # original, and calculate total branch length after that.
-    # Step 1: Read in ye olde treefile, figure out which nodes within tree structure are leaves.
-    tree = ete3.Tree(newick=treefile)
 
     # Step 2: Find the two terminals with the most distance between them.
     starting_strains = find_starting_leaves(tree, starting_strains)
 
     while len(starting_strains) < number_tips:
         next_leaf = find_next_leaf(starting_strains, tree)
-        if next_leaf is None:
-            logging.error('ERROR: Could not find the next leaf to add.')
-            quit(code=1)
         starting_strains.append(next_leaf)
     return starting_strains
 
@@ -143,7 +176,7 @@ def modify_tree_with_weights(tree, weights):
     return newtree
 
 
-def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, color='red'):
+def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, color='red', mode='r'):
     """
     Given a list of representatives, shows (for now) a phylogeny that has those representatives highlighted in
     a color to show it off.
@@ -153,9 +186,11 @@ def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, co
     others work
     :param color: Color to show selected strains as. Defaults to red. Other choices available can be found at
     http://etetoolkit.org/docs/latest/reference/reference_treeview.html#ete3.SVG_COLORS
+    :param mode: method for tree drawing - options are r for rectangular or c for circular
     """
     tree = copy.deepcopy(tree_to_draw)  # Don't want to actually modify original tree.
     ts = TreeStyle()
+    ts.mode = mode
     ts.show_leaf_name = False
     for terminal_clade in tree.get_leaves():
         if terminal_clade.name in representatives:
@@ -299,7 +334,7 @@ def generate_html_report(completed_choosr_list, output_report):
         f.write(html_string)
 
 
-def main():
+def argument_parsing(args):
     parser = argparse.ArgumentParser(description='StrainChoosr uses the greedy algorithm described in Pardi 2005/Steel '
                                                  '2005 to find the most diverse subset of strains from a phylogenetic '
                                                  'tree. ADD DOIs HERE')
@@ -320,7 +355,7 @@ def main():
     parser.add_argument('--tree_mode',
                         default='r',
                         choices=['r', 'c'],
-                        help='Mode to display output trees in - choose from r for rectangular ' 
+                        help='Mode to display output trees in - choose from r for rectangular '
                              'or c for circular. Defaults to rectangular.')
     parser.add_argument('--weight_file',
                         required=False,
@@ -332,42 +367,85 @@ def main():
                         nargs='+',
                         help='Names of strains that must be included in your set of diverse strains, separated by '
                              'spaces.')
+    parser.add_argument('--color',
+                        default='red',
+                        help='Color you want to have selected strains shown as. List of available colors is available '
+                             'at http://etetoolkit.org/docs/latest/reference/reference_treeview.html#ete3.SVG_COLORS '
+                             'Defaults to red.')
     parser.add_argument('--verbosity',
                         choices=['debug', 'info', 'warning'],
                         default='info',
                         help='Choice of how much information you want printed to the terminal. Set debug to see a '
                              'ridiculous amount of stuff, info for a normal amount, and warning for very minimal '
                              'output.')
-    args = parser.parse_args()
+    parser.add_argument('-v', '--version',
+                        action='version',
+                        version=get_version())
+    return parser.parse_args(args)
 
-    if args.verbosity == 'info':
+
+def run_strainchoosr(treefile, number_representatives, starting_strains=[], output_name='strainchoosr_output',
+                     tree_mode='r', weight_file=None, verbosity='info', rep_strain_color='red'):
+    """
+    :param treefile:
+    :param number_representatives:
+    :param starting_strains:
+    :param output_name:
+    :param tree_mode:
+    :param weight_file:
+    :param verbosity:
+    :param rep_strain_color:
+    :return:
+    """
+    if verbosity == 'info':
         logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                             level=logging.INFO,
                             datefmt='%Y-%m-%d %H:%M:%S')
-    elif args.verbosity == 'debug':
+    elif verbosity == 'debug':
         logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                             level=logging.DEBUG,
                             datefmt='%Y-%m-%d %H:%M:%S')
-    elif args.verbosity == 'warning':
+    elif verbosity == 'warning':
         logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                             level=logging.WARNING,
                             datefmt='%Y-%m-%d %H:%M:%S')
-    # Now actually do stuff here!
-    tree = ete3.Tree(args.treefile)
-    starting_leaves = find_starting_leaves(tree, args.starting_strains)
+    tree = ete3.Tree(newick=treefile)
+    if weight_file is not None:
+        weights = read_weights_file(weight_file)
+        original_tree = copy.deepcopy(tree)
+        tree = modify_tree_with_weights(original_tree, weights)
+    starting_strains = get_leaf_nodes_from_names(tree, starting_strains)
+    starting_leaves = find_starting_leaves(tree, starting_strains)
     completed_choosrs = list()
     with tempfile.TemporaryDirectory() as tmpdir:
-        for number in args.number:
-            strains = pd_greedy(args.treefile, number, starting_leaves)
+        for number in number_representatives:
+            strains = pd_greedy(tree, number, starting_leaves)
             output_image = os.path.join(tmpdir, 'strains_{}.png'.format(number))
             create_colored_tree_tip_image(tree_to_draw=tree,
                                           output_file=output_image,
-                                          representatives=get_leaf_names_from_nodes(strains))
+                                          representatives=get_leaf_names_from_nodes(strains),
+                                          mode=tree_mode,
+                                          color=rep_strain_color)
             completed_choosrs.append(CompletedStrainChoosr(representatives=get_leaf_names_from_nodes(strains),
                                                            image=output_image,
                                                            name='{} Strains'.format(number)))
+            logging.info('Strains selected for {} representatives:'.format(number))
+            for leaf_name in get_leaf_names_from_nodes(strains):
+                logging.info(leaf_name)
         generate_html_report(completed_choosrs,
-                             args.output_name + '.html')
+                             output_name + '.html')
+
+
+def main():
+    args = argument_parsing(sys.argv[1:])
+    run_strainchoosr(treefile=args.treefile,
+                     number_representatives=args.number,
+                     starting_strains=args.starting_strains,
+                     output_name=args.output_name,
+                     tree_mode=args.tree_mode,
+                     weight_file=args.weight_file,
+                     verbosity=args.verbosity,
+                     rep_strain_color=args.color)
 
 
 if __name__ == '__main__':

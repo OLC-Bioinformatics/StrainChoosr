@@ -8,7 +8,7 @@ services:
   - xvfb
 
 env:
-  - QT_QPA_PLATFORM=offscreen
+  - QT_QPA_PLATFORM=offscreen  # Need this in order to have the Qt powered tree drawing work.
 
 install:
   - pip install -e .
@@ -18,9 +18,3 @@ branches:
 
 script:
   - pytest tests
-  # Run a few integration tests here - make sure they don't fail.
-  # Normal strainchoosr run
-  - strainchoosr -t tests/tree_files/tree.nwk -n 4 6 8 10
-  # Specify starting strains
-  - strainchoosr -t tests/tree_files/tree.nwk -n 4 6 8 --starting_strains 2018-SEQ-1295.fasta 2017-MER-0763.fasta 2017-SEQ-0094.fasta
-  # Tree weights TODO
