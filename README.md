@@ -1,5 +1,5 @@
 [![Build status](https://travis-ci.org/lowandrew/StrainChoosr.svg?master)](https://travis-ci.org/lowandrew)
-[![codecov](https://codecov.io/gh/lowandrew/StrainChoosr/branch/master/graph/badge.svg)](https://codecov.io/gh/lowandrew/socru)
+[![codecov](https://codecov.io/gh/lowandrew/StrainChoosr/branch/master/graph/badge.svg)](https://codecov.io/gh/lowandrew/StrainChoosr)
 
 
 # StrainChoosr
