@@ -16,6 +16,13 @@ from ete3 import NodeStyle, TreeStyle, TextFace
 
 
 def get_version():
+    """
+
+    Uses :mod:`pkg_resources` to figure out what version StrainChoosr is.
+
+    :return: StrainChoosr X.Y.Z if a version was found, otherwise StrainChoosr (Unknown version)
+    """
+
     try:
         version = 'StrainChoosr {}'.format(pkg_resources.get_distribution('strainchoosr').version)
     except pkg_resources.DistributionNotFound:
@@ -25,11 +32,13 @@ def get_version():
 
 def find_starting_leaves(tree, starting_leaf_list):
     """
+
     Gets the start of what the most diverse set of strains should be.
     If starting_leaf_list has nothing in it, the two strains that are the farthest apart will be picked (longest total
     branch length between them). If there is one entry in starting leaf list, the list returned will be that leaf plus
     whatever leaf on the tree is the farthest from it. If more than two leaves are in starting_leaf_list, nothing
-    happens and just that will get returned.
+    happens and just the original list will get returned.
+
     :param tree: An ete3.Tree object
     :param starting_leaf_list: A list of ete3.TreeNode objects.
     :return: A list of ete3.TreeNode objects representing the most diverse starting set possible
@@ -52,9 +61,9 @@ def find_starting_leaves(tree, starting_leaf_list):
         logging.debug('Starting with 1 leaf. Finding the leaf that has the most branch length between it and the '
                       'specified starting leaf.')
         leaves = tree.get_leaves()
+        starting_leaf = starting_leaf_list[0]
         max_distance = 0
         most_distant_leaf = None
-        starting_leaf = starting_leaf_list[0]
         for leaf in leaves:
             if leaf.name != starting_leaf:
                 distance = tree.get_distance(leaf, starting_leaf)
@@ -68,7 +77,9 @@ def find_starting_leaves(tree, starting_leaf_list):
 
 def get_leaf_names_from_nodes(leaf_nodes):
     """
+
     Given a list of ete3.TreeNode objects, will give the node names for each one.
+
     :param leaf_nodes: List of ete3.TreeNode objects.
     :return: list of the names of the TreeNode objects.
     """
@@ -80,8 +91,10 @@ def get_leaf_names_from_nodes(leaf_nodes):
 
 def get_leaf_nodes_from_names(tree, leaf_names):
     """
+
     Given a list of names and a phylogenetic tree, returns an ete3.TreeNode object for each leaf name. If a node can't
     be found, a RuntimeError is raised. If more than one leaf has the same name, only the first will be returned.
+
     :param tree: An ete3.Tree object.
     :param leaf_names: List of leaf names that
     :return:
@@ -99,12 +112,13 @@ def get_leaf_nodes_from_names(tree, leaf_names):
 
 def find_next_leaf(diverse_leaves, tree):
     """
+
     Given a set of leaves we've already decided represent the most diversity, find the next leaf that contributes
     the most diversity.
-    :param diverse_leaves: List of leaves that we've already decided represent the most diversity possible - each
-    entry in this list should be an ete3.TreeNode object
+
+    :param diverse_leaves: List of leaves that we've already decided represent the most diversity possible - each entry in this list should be an ete3.TreeNode object
     :param tree: an ete3.Tree object that contains the nodes listed in diverse_leaves
-    :return:
+    :return: an ete3.TreeNode object representing the leaf that adds the most diversity to `diverse_leaves`
     """
     # Here, we prune off everything except for the leaves we've already selected as diverse and one other leaf in the tree
     # for each leaf in the tree, keeping branch lengths intact. Select the leaf that creates the tree with the longest
@@ -137,19 +151,20 @@ def find_next_leaf(diverse_leaves, tree):
 def pd_greedy(tree, number_tips, starting_strains):
     """
 
-    :param tree:
-    :param number_tips:
-    :param starting_strains:
-    :return:
+    Implements the greedy algorithm described in Species Choice for Comparative Genomics: Being Greedy Works (Pardi 2005
+    and Phylogenetic Diversity and the Greedy Algorithm (Steel 2005).
+
+    :param tree: An ete3.Tree object
+    :param number_tips: Number of strains you want to pick out.
+    :param starting_strains: List of ete3.TreeNode objects that make up your starting strains. If empty, will be chosen
+    automatically
+    :return: List of ete3.TreeNode objects representing the maximum possible amount of diversity.
     """
-    # My understanding of this algorithm - start out by picking the two strains that have the longest total length
+    # The way this works - start out by picking the two strains that have the longest total length
     # between them in the tree.
     # From there, add the leaf that adds the most total branch length to the tree, then just keep doing that until
     # you hit the number of strains you want.
-    # To actually implement this, should just be able to have all strains but the ones in your tree pruned from the
-    # original, and calculate total branch length after that.
 
-    # Step 2: Find the two terminals with the most distance between them.
     starting_strains = find_starting_leaves(tree, starting_strains)
 
     while len(starting_strains) < number_tips:
@@ -160,12 +175,13 @@ def pd_greedy(tree, number_tips, starting_strains):
 
 def modify_tree_with_weights(tree, weights):
     """
+
     Given an ete3 Tree object and a dictionary where keys are node names in the tree and values are multipliers (can
     be generated with read_weights_file), returns a new tree where each branch in the weights dictionary is multiplied
     by the multiplier specified.
+
     :param tree: an ete3.Tree object
-    :param weights: Dictionary where keys are names of nodes/tips in the tree, and values are weights by which branch
-    lengths will be multiplied
+    :param weights: Dictionary where keys are names of nodes/tips in the tree, and values are weights by which branch lengths will be multiplied
     :return: A new ete3.Tree where branch lengths have been modified.
     """
     newtree = copy.deepcopy(tree)
@@ -182,14 +198,14 @@ def modify_tree_with_weights(tree, weights):
 
 def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, color='red', mode='r'):
     """
+
     Given a list of representatives, shows (for now) a phylogeny that has those representatives highlighted in
     a color to show it off.
+
     :param tree_to_draw: an ete3 Tree object. This won't get modified at any point.
     :param representatives: List with each strain name that should be highlighted.
-    :param output_file: File to write output to, including extension. Tested with .png and .pdf so far, not sure what
-    others work
-    :param color: Color to show selected strains as. Defaults to red. Other choices available can be found at
-    http://etetoolkit.org/docs/latest/reference/reference_treeview.html#ete3.SVG_COLORS
+    :param output_file: File to write output to, including extension. Works with .pdf, .png, and .svg
+    :param color: Color to show selected strains as. Defaults to red. Other choices available can be found at http://etetoolkit.org/docs/latest/reference/reference_treeview.html#ete3.SVG_COLORS
     :param mode: method for tree drawing - options are r for rectangular or c for circular
     """
     tree = copy.deepcopy(tree_to_draw)  # Don't want to actually modify original tree.
@@ -200,7 +216,7 @@ def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, co
         if terminal_clade.name in representatives:
             nstyle = NodeStyle()
             nstyle['shape'] = 'circle'
-            nstyle['fgcolor'] = 'red'
+            nstyle['fgcolor'] = color
             nstyle['size'] = 10
             name_face = TextFace(terminal_clade.name, fgcolor=color, fsize=10)
             terminal_clade.add_face(name_face, column=0)
@@ -215,8 +231,10 @@ def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, co
 
 def read_weights_file(weights_file):
     """
+
     Given a tab separated file with leaf names for a phylogenetic tree in column one and multipliers for that leaf's
     branch length in column two, will create a dictionary with leaf names as keys and multipliers as values
+
     :param weights_file: Path to a tab-separated text file described above.
     :return: dictionary with leaf names as keys and multipliers as values
     """
@@ -225,7 +243,6 @@ def read_weights_file(weights_file):
         for line in f:
             stripped_line = line.rstrip()
             x = stripped_line.split('\t')
-            print(x)
             if len(x) != 2 and stripped_line != '':
                 raise RuntimeError('One of the lines in your weights file ({}) is not formatted correctly. '
                                    'Correct format is leafname\tweight, tab-separated. '
@@ -249,6 +266,13 @@ class CompletedStrainChoosr:
 
 
 def generate_html_report(completed_choosr_list, output_report):
+    """
+
+    Generates a nice(ish) looking HTML report detailing StrainChoosr output.
+
+    :param completed_choosr_list: List of CompletedChoosr objects - each of these has a list of leaf names, path to an image file, and a name
+    :param output_report: filename to write HTML report. Will overwrite a report that already exists.
+    """
     # With tabs as shown in w3schools: https://www.w3schools.com/howto/howto_js_tabs.asp
     style = """
     <style>
@@ -341,7 +365,7 @@ def generate_html_report(completed_choosr_list, output_report):
 def argument_parsing(args):
     parser = argparse.ArgumentParser(description='StrainChoosr uses the greedy algorithm described in Pardi 2005/Steel '
                                                  '2005 to find the most diverse subset of strains from a phylogenetic '
-                                                 'tree. ADD DOIs HERE')
+                                                 'tree.')
     parser.add_argument('-t', '--treefile',
                         type=str,
                         required=True,
@@ -391,15 +415,17 @@ def argument_parsing(args):
 def run_strainchoosr(treefile, number_representatives, starting_strains=[], output_name='strainchoosr_output',
                      tree_mode='r', weight_file=None, verbosity='info', rep_strain_color='red'):
     """
-    :param treefile:
-    :param number_representatives:
-    :param starting_strains:
-    :param output_name:
-    :param tree_mode:
-    :param weight_file:
-    :param verbosity:
-    :param rep_strain_color:
-    :return:
+
+    Runs the strainchoosr pipeline and prints strains picked as diverse to the terminal.
+
+    :param treefile: Path to a newick-formatted treefile.
+    :param number_representatives: List of numbers of representatives.
+    :param starting_strains: List of leaf names that should make up starting strains. Defaults to nothing, so starting strains automatically get chosen
+    :param output_name: Base name for output file - defaults to strainchoosr_output
+    :param tree_mode: Mode for displaying tree in output HTML file. Can be r for rectangualar or c for circular. Defaults to r.
+    :param weight_file: If specified, is a path to a file that modifies branch lengths. File should be tab-separated, with leaf names in column one and multiplier in column two
+    :param verbosity: verbosity level: options are debug for loads of information, info for regular amounts, or warning for almost none.
+    :param rep_strain_color: Color for strains picked to be shown in html report. Defaults to red.
     """
     if verbosity == 'info':
         logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
@@ -419,14 +445,17 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
         original_tree = copy.deepcopy(tree)
         tree = modify_tree_with_weights(original_tree, weights)
     starting_strains = get_leaf_nodes_from_names(tree, starting_strains)
-    starting_leaves = find_starting_leaves(tree, starting_strains)
     completed_choosrs = list()
     with tempfile.TemporaryDirectory() as tmpdir:
-        for number in number_representatives:
+        # Due to the fact I'm actually modifying arrays in place instead of copying (ete3 does not like it when
+        # TreeNodes get copied, everything gets pretty screwy), need to go from fewest number of representatives
+        # to most.
+        for number in sorted(number_representatives):
             if len(tree.get_leaves()) < number:
                 raise ValueError('You requested that {} strains be selected, but your tree only has {} leaves. '
                                  'Please select an appropriate number of strains to be selected.'.format(number,
                                                                                                          len(tree.get_leaves())))
+            starting_leaves = find_starting_leaves(tree, starting_strains)
             strains = pd_greedy(tree, number, starting_leaves)
             output_image = os.path.join(tmpdir, 'strains_{}.png'.format(number))
             create_colored_tree_tip_image(tree_to_draw=tree,
@@ -439,7 +468,7 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
                                                            name='{} Strains'.format(number)))
             logging.info('Strains selected for {} representatives:'.format(number))
             for leaf_name in get_leaf_names_from_nodes(strains):
-                logging.info(leaf_name)
+                print(leaf_name)
         generate_html_report(completed_choosrs,
                              output_name + '.html')
 
