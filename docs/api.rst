@@ -1,5 +1,5 @@
 API Reference
 =============
 
-.. automodule:: strainchoosr.strainchoosr
+.. automodule:: strainchoosr
     :members:

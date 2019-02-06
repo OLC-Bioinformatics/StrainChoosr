@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('../strainchoosr'))
 # -- Project information -----------------------------------------------------
 
 project = 'StrainChoosr'
-copyright = '2019, Andrew Low'
+copyright = '2019, Government of Canada'
 author = 'Andrew Low'
 
 # The short X.Y version
