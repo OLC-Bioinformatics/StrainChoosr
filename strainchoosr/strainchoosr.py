@@ -34,7 +34,9 @@ def find_starting_leaves(tree, starting_leaf_list):
     :param starting_leaf_list: A list of ete3.TreeNode objects.
     :return: A list of ete3.TreeNode objects representing the most diverse starting set possible
     """
+    logging.debug('Finding starting leaves.')
     if len(starting_leaf_list) == 0:
+        logging.debug('Starting with 0 leaves. Finding the two leaves with most total branch length between them.')
         leaves = tree.get_leaves()
         max_distance = 0
         most_distant_leaves = None, None
@@ -47,6 +49,8 @@ def find_starting_leaves(tree, starting_leaf_list):
         starting_leaf_list.append(most_distant_leaves[0])
         starting_leaf_list.append(most_distant_leaves[1])
     elif len(starting_leaf_list) == 1:
+        logging.debug('Starting with 1 leaf. Finding the leaf that has the most branch length between it and the '
+                      'specified starting leaf.')
         leaves = tree.get_leaves()
         max_distance = 0
         most_distant_leaf = None
@@ -64,9 +68,9 @@ def find_starting_leaves(tree, starting_leaf_list):
 
 def get_leaf_names_from_nodes(leaf_nodes):
     """
-    TODO: This
-    :param leaf_nodes:
-    :return:
+    Given a list of ete3.TreeNode objects, will give the node names for each one.
+    :param leaf_nodes: List of ete3.TreeNode objects.
+    :return: list of the names of the TreeNode objects.
     """
     leaf_names = list()
     for node in leaf_nodes:
@@ -76,9 +80,10 @@ def get_leaf_names_from_nodes(leaf_nodes):
 
 def get_leaf_nodes_from_names(tree, leaf_names):
     """
-    TODO: this
-    :param tree:
-    :param leaf_names:
+    Given a list of names and a phylogenetic tree, returns an ete3.TreeNode object for each leaf name. If a node can't
+    be found, a RuntimeError is raised. If more than one leaf has the same name, only the first will be returned.
+    :param tree: An ete3.Tree object.
+    :param leaf_names: List of leaf names that
     :return:
     """
     leaf_nodes = list()
@@ -116,6 +121,7 @@ def find_next_leaf(diverse_leaves, tree):
 
     # In the event multiple strains have same distance, sort the keys so we're consistent about which one we're taking
     for leafname in sorted(sets_to_try):
+        logging.debug('Calculating total tree distance when adding leaf {}.'.format(leafname))
         total_branch_length = 0
         newtree = tree.copy()
         newtree.prune(get_leaf_names_from_nodes(sets_to_try[leafname]), preserve_branch_length=True)
@@ -124,6 +130,7 @@ def find_next_leaf(diverse_leaves, tree):
         if total_branch_length > longest_total_branch_length:
             leaf_to_return = tree.get_leaves_by_name(leafname)[0]
             longest_total_branch_length = total_branch_length
+        logging.debug('Total tree distance when adding {} was {}.'.format(total_branch_length, leafname))
     return leaf_to_return
 
 
