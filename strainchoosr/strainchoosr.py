@@ -14,9 +14,6 @@ import pkg_resources
 import ete3
 from ete3 import NodeStyle, TreeStyle, TextFace
 
-# TODO: Handle trees with no branch lengths
-# TODO: Check that number of strains requested/started with isn't more than tree has
-
 
 def get_version():
     try:
@@ -419,6 +416,10 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
     completed_choosrs = list()
     with tempfile.TemporaryDirectory() as tmpdir:
         for number in number_representatives:
+            if len(tree.get_leaves()) < number:
+                raise ValueError('You requested that {} strains be selected, but your tree only has {} leaves. '
+                                 'Please select an appropriate number of strains to be selected.'.format(number,
+                                                                                                         len(tree.get_leaves())))
             strains = pd_greedy(tree, number, starting_leaves)
             output_image = os.path.join(tmpdir, 'strains_{}.png'.format(number))
             create_colored_tree_tip_image(tree_to_draw=tree,

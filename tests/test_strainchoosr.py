@@ -266,6 +266,15 @@ def test_run_strainchoosr():
         assert os.path.isfile(os.path.join(tmpdir, 'st_report.html'))
 
 
+def test_run_strainchoosr_too_many_strains():
+    with pytest.raises(ValueError):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_strainchoosr(treefile='tests/tree_files/tree.nwk',
+                             number_representatives=[5, 10, 256],
+                             output_name=os.path.join(tmpdir, 'st_report'))
+            assert os.path.isfile(os.path.join(tmpdir, 'st_report.html'))
+
+
 def test_run_strainchoosr_weights_file():
     with tempfile.TemporaryDirectory() as tmpdir:
         run_strainchoosr(treefile='tests/tree_files/tree.nwk',
