@@ -1,4 +1,4 @@
-|Travis| |Coverage| |PyPI|
+|Travis| |Coverage| |PyPI| |ReadTheDocs|
 
 StrainChoosr
 ============
@@ -38,6 +38,11 @@ To do the same within python::
     from strainchoosr import strainchoosr
     strainchoosr.run_strainchoosr(treefile='/path/to/tree.nwk', number_representatives=[5])
 
+
+In addition to printing the strains to terminal, ``run_strainchoosr`` will return a dictionary where keys are
+the number of representatives and values are lists of the strains selected for that
+number of representatives.
+
 Issues and Pull Requests
 ========================
 
@@ -56,3 +61,6 @@ add a feature or otherwise improve things, feel free to open a pull request.
 
 .. |PyPI| image:: https://badge.fury.io/py/strainchoosr.svg
            :target: https://badge.fury.io/py/strainchoosr
+.. |ReadTheDocs| image:: https://readthedocs.org/projects/strainchoosr/badge/?version=latest
+          :target: https://strainchoosr.readthedocs.io/?badge=latest
+          :alt: Documentation Status

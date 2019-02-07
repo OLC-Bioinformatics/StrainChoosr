@@ -266,6 +266,15 @@ def test_run_strainchoosr():
         assert os.path.isfile(os.path.join(tmpdir, 'st_report.html'))
 
 
+def test_run_strainchoosr_output_dictionary():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dict = run_strainchoosr(treefile='tests/tree_files/tree.nwk',
+                                       number_representatives=[4],
+                                       output_name=os.path.join(tmpdir, 'st_report'))
+        assert os.path.isfile(os.path.join(tmpdir, 'st_report.html'))
+    assert output_dict[4] == ['2018-SEQ-0383.fasta', '2018-SEQ-0100.fasta', '2018-SEQ-0385.fasta', '2017-MER-0763.fasta']
+
+
 def test_run_strainchoosr_too_many_strains():
     with pytest.raises(ValueError):
         with tempfile.TemporaryDirectory() as tmpdir:

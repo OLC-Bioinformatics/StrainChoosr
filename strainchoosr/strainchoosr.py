@@ -426,7 +426,9 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
     :param weight_file: If specified, is a path to a file that modifies branch lengths. File should be tab-separated, with leaf names in column one and multiplier in column two
     :param verbosity: verbosity level: options are debug for loads of information, info for regular amounts, or warning for almost none.
     :param rep_strain_color: Color for strains picked to be shown in html report. Defaults to red.
+    :return: dictionary where number of strains is the key and the value is a list of representatives
     """
+    output_dictionary = dict()
     if verbosity == 'info':
         logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                             level=logging.INFO,
@@ -451,6 +453,7 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
         # TreeNodes get copied, everything gets pretty screwy), need to go from fewest number of representatives
         # to most.
         for number in sorted(number_representatives):
+            output_dictionary[number] = list()
             if len(tree.get_leaves()) < number:
                 raise ValueError('You requested that {} strains be selected, but your tree only has {} leaves. '
                                  'Please select an appropriate number of strains to be selected.'.format(number,
@@ -469,8 +472,10 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
             logging.info('Strains selected for {} representatives:'.format(number))
             for leaf_name in get_leaf_names_from_nodes(strains):
                 print(leaf_name)
+                output_dictionary[number].append(leaf_name)
         generate_html_report(completed_choosrs,
                              output_name + '.html')
+    return output_dictionary
 
 
 def main():
