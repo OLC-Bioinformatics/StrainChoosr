@@ -180,6 +180,7 @@ def test_pd_greedy():
     assert '2018-SEQ-0100.fasta' in names
     assert '2018-SEQ-0385.fasta' in names
     assert '2017-MER-0763.fasta' in names
+    assert len(starting_leaves) == 2
 
 
 def test_tree_draw():
@@ -206,6 +207,15 @@ def test_tree_draw_alternate_color():
         representatives = ['2018-SEQ-0383.fasta', '2018-SEQ-0100.fasta', '2018-SEQ-0385.fasta', '2017-MER-0763.fasta']
         output_file = os.path.join(tmpdir, 'tree.png')
         create_colored_tree_tip_image(tree, representatives, output_file, color='lavender')
+        assert os.path.isfile(output_file)
+
+
+def test_tree_draw_rotated():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tree = ete3.Tree('tests/tree_files/tree.nwk')
+        representatives = ['2018-SEQ-0383.fasta', '2018-SEQ-0100.fasta', '2018-SEQ-0385.fasta', '2017-MER-0763.fasta']
+        output_file = os.path.join(tmpdir, 'tree.png')
+        create_colored_tree_tip_image(tree, representatives, output_file, color='lavender', rotation=90)
         assert os.path.isfile(output_file)
 
 

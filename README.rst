@@ -38,10 +38,21 @@ To do the same within python::
     from strainchoosr import strainchoosr
     strainchoosr.run_strainchoosr(treefile='/path/to/tree.nwk', number_representatives=[5])
 
-
 In addition to printing the strains to terminal, ``run_strainchoosr`` will return a dictionary where keys are
 the number of representatives and values are lists of the strains selected for that
 number of representatives.
+
+Alternatively, if all you want to get is the list of strains and not generated html reports::
+
+    from strainchoosr import strainchoosr
+    import ete3
+    tree = ete3.Tree('path/to/treefile.nwk')
+    diverse_strains = strainchoosr.pd_greedy(tree=tree, number_tips=5, starting_strains=[])
+
+This will get you a list of ete3.TreeNode objects that represent the 5 most diverse possible strains. You can then use
+``strainchoosr.get_leaf_names_from_nodes(diverse_strains)`` to get a list of names.
+
+Complete documentation on the ``strainchoosr`` API can be found at https://strainchoosr.readthedocs.io/api.html.
 
 Issues and Pull Requests
 ========================

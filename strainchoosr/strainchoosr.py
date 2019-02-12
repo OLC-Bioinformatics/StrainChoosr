@@ -156,8 +156,7 @@ def pd_greedy(tree, number_tips, starting_strains):
 
     :param tree: An ete3.Tree object
     :param number_tips: Number of strains you want to pick out.
-    :param starting_strains: List of ete3.TreeNode objects that make up your starting strains. If empty, will be chosen
-    automatically
+    :param starting_strains: List of ete3.TreeNode objects that make up your starting strains. If empty, will be chosen automatically
     :return: List of ete3.TreeNode objects representing the maximum possible amount of diversity.
     """
     # The way this works - start out by picking the two strains that have the longest total length
@@ -165,12 +164,13 @@ def pd_greedy(tree, number_tips, starting_strains):
     # From there, add the leaf that adds the most total branch length to the tree, then just keep doing that until
     # you hit the number of strains you want.
 
-    starting_strains = find_starting_leaves(tree, starting_strains)
+    diverse_strains = copy.deepcopy(starting_strains)
+    diverse_strains = find_starting_leaves(tree, diverse_strains)
 
-    while len(starting_strains) < number_tips:
-        next_leaf = find_next_leaf(starting_strains, tree)
-        starting_strains.append(next_leaf)
-    return starting_strains
+    while len(diverse_strains) < number_tips:
+        next_leaf = find_next_leaf(diverse_strains, tree)
+        diverse_strains.append(next_leaf)
+    return diverse_strains
 
 
 def modify_tree_with_weights(tree, weights):
@@ -196,7 +196,7 @@ def modify_tree_with_weights(tree, weights):
     return newtree
 
 
-def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, color='red', mode='r'):
+def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, color='red', mode='r', rotation=0):
     """
 
     Given a list of representatives, shows (for now) a phylogeny that has those representatives highlighted in
@@ -207,11 +207,13 @@ def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, co
     :param output_file: File to write output to, including extension. Works with .pdf, .png, and .svg
     :param color: Color to show selected strains as. Defaults to red. Other choices available can be found at http://etetoolkit.org/docs/latest/reference/reference_treeview.html#ete3.SVG_COLORS
     :param mode: method for tree drawing - options are r for rectangular or c for circular
+    :param rotation: how much to rotate the tree (in a clockwise direction). Default is 0.
     """
     tree = copy.deepcopy(tree_to_draw)  # Don't want to actually modify original tree.
     ts = TreeStyle()
     ts.mode = mode
     ts.show_leaf_name = False
+    ts.rotation = rotation
     for terminal_clade in tree.get_leaves():
         if terminal_clade.name in representatives:
             nstyle = NodeStyle()
@@ -319,6 +321,7 @@ def generate_html_report(completed_choosr_list, output_report):
 
     javascript = """
     <script>
+    document.getElementById("defaultOpen").click();
     function openCity(evt, cityName) {
       var i, tabcontent, tablinks;
       tabcontent = document.getElementsByClassName("tabcontent");
@@ -342,7 +345,11 @@ def generate_html_report(completed_choosr_list, output_report):
 
     html_content.append('<div class="tab">\n')
     for completed_choosr in completed_choosr_list:
-        html_content.append('<button class="tablinks" onclick="openCity(event, \'{name}\')">{name}</button>'.format(name=completed_choosr.name))
+        # Make the first completed choosr show by default.
+        if completed_choosr_list.index(completed_choosr) == 0:
+            html_content.append('<button class="tablinks" id="defaultOpen" onclick="openCity(event, \'{name}\')">{name}</button>'.format(name=completed_choosr.name))
+        else:
+            html_content.append('<button class="tablinks" onclick="openCity(event, \'{name}\')">{name}</button>'.format(name=completed_choosr.name))
     html_content.append('</div>')
     for completed_choosr in completed_choosr_list:
         html_content.append('<div id="{name}" class="tabcontent">'.format(name=completed_choosr.name))
@@ -449,10 +456,7 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
     starting_strains = get_leaf_nodes_from_names(tree, starting_strains)
     completed_choosrs = list()
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Due to the fact I'm actually modifying arrays in place instead of copying (ete3 does not like it when
-        # TreeNodes get copied, everything gets pretty screwy), need to go from fewest number of representatives
-        # to most.
-        for number in sorted(number_representatives):
+        for number in number_representatives:
             output_dictionary[number] = list()
             if len(tree.get_leaves()) < number:
                 raise ValueError('You requested that {} strains be selected, but your tree only has {} leaves. '
