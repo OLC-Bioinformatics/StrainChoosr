@@ -21,7 +21,7 @@ before_script:
 
 script:
 #  - coverage run setup.py pytest
-  - pytest
+  - pytest -vvvvv
 
 #after_success:
 #  - codecov
