@@ -18,6 +18,6 @@ setup(
     tests_require=['pytest'],
     install_requires=['pytest',
                       'ete3',
-                      'PyQt5',  # Apparently required by ete3 for visualisation, but not listed in that setup.py...
+                      'PyQt5==5.11.3',  # Apparently required by ete3 for visualisation, but not listed in that setup.py...
                       ]
 )
