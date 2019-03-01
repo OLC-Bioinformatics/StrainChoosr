@@ -9,6 +9,8 @@ setup(
     entry_points={
         'console_scripts': [
             'strainchoosr = strainchoosr.strainchoosr:main',
+            'strainchoosr_gui = strainchoosr.strainchoosr_gui:main',
+            'strainchoosr_drawimage = strainchoosr.strainchoosr_gui:draw_image_wrapper'
         ],
     },
     author='Andrew Low',
