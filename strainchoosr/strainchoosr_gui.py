@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-from PyQt5.QtWidgets import QApplication, QFileDialog, QMainWindow, QPushButton, QErrorMessage, QLabel, QSpinBox, QColorDialog
+from PyQt5.QtWidgets import QApplication, QFileDialog, QMainWindow, QPushButton, QErrorMessage, QLabel, QSpinBox, \
+    QColorDialog, QProgressBar, QRadioButton
 from PyQt5.QtGui import QPixmap, QPalette, QColor
 from PyQt5.QtCore import Qt
 from strainchoosr import strainchoosr
@@ -9,6 +10,12 @@ import shutil
 import ete3
 import sys
 import os
+
+# TODO: Make progress bar at least a bit better - currently gives very little info.
+# TODO: Have calculation get done in a separate thread - on big trees the window freezes.
+# TODO: Have image that gets created be resizeable/zoomable. Pretty useless on bigger trees.
+# TODO: Allow user to pick starting strains.
+# TODO: Allow user to select tree weights.
 
 
 class StrainChoosrGUI(QMainWindow):
@@ -34,6 +41,13 @@ class StrainChoosrGUI(QMainWindow):
         self.color_label = None
         self.color_label_palette = None
         self.color = 'red'
+        self.export_chosen_strains = None
+        self.chosen_strains = list()
+        self.progress = QProgressBar(self)
+        self.file_save_button = None
+        self.tree_orientation_rect = None
+        self.tree_orientation_circ = None
+        self.tree_orient = 'r'
         self.init_ui()
 
     def init_ui(self):
@@ -68,6 +82,35 @@ class StrainChoosrGUI(QMainWindow):
         self.color_label_palette = self.color_label.palette()
         self.color_label_palette.setColor(QPalette.Background, QColor(self.color))
         self.color_label.setPalette(self.color_label_palette)
+        self.file_save_button = QPushButton('Save Strains', self)
+        self.file_save_button.setEnabled(False)
+        self.file_save_button.clicked.connect(self.file_save)
+        self.file_save_button.resize(200, 40)
+        self.file_save_button.move(450, 450)
+        self.progress.move(0, 300)
+        self.tree_orientation_rect = QRadioButton('Rectangular', self)
+        self.tree_orientation_circ = QRadioButton('Circular', self)
+        self.tree_orientation_rect.setChecked(True)
+        self.tree_orientation_rect.toggled.connect(lambda: self.orientation_btn_state(self.tree_orientation_rect))
+        self.tree_orientation_circ.toggled.connect(lambda: self.orientation_btn_state(self.tree_orientation_circ))
+        self.tree_orientation_rect.move(0, 350)
+        self.tree_orientation_circ.move(0, 375)
+        self.tree_orientation_rect.show()
+        self.tree_orientation_circ.show()
+
+    def orientation_btn_state(self, b):
+        if b.text() == 'Rectangular':
+            if b.isChecked():
+                self.tree_orient = 'r'
+        if b.text() == 'Circular':
+            if b.isChecked():
+                self.tree_orient = 'c'
+
+    def file_save(self):
+        output_file_name = QFileDialog.getSaveFileName(self, 'Save File')[0]
+        with open(output_file_name, 'w') as f:
+            for strain_name in self.chosen_strains:
+                f.write('{strain_name}\n'.format(strain_name=strain_name))
 
     def choose_color(self):
         color = QColorDialog.getColor()
@@ -105,6 +148,7 @@ class StrainChoosrGUI(QMainWindow):
         self.color_dialog_button.setEnabled(True)
         self.color_dialog_button.show()
         self.color_label.show()
+        self.file_save_button.setEnabled(True)
         self.newick_tree_label.setText(os.path.split(self.newick_tree)[1])
 
     def run_strainchoosr(self):
@@ -113,8 +157,11 @@ class StrainChoosrGUI(QMainWindow):
             msg.showMessage('You have not selected a tree, do that first!')
             msg.exec_()
         else:
+            self.progress.setValue(0)
             tree = ete3.Tree(self.newick_tree)
             diverse_strains = strainchoosr.pd_greedy(tree=tree, number_tips=self.strain_number_input.value(), starting_strains=[])
+            self.chosen_strains = strainchoosr.get_leaf_names_from_nodes(diverse_strains)
+            self.progress.setValue(50)
             # Future person looking at this - you may be wondering why launching a subprocess here is necessary at all.
             # Here's why - the underlying ete3 code that renders the tree to image uses PyQt and somewhere in there
             # another PyQt application is launched. Then, when this GUI gets closed, the GUI process is still running
@@ -122,9 +169,10 @@ class StrainChoosrGUI(QMainWindow):
             # I couldn't find a way to kill the ete3 PyQt app via the code, so my hacky solution is to run tree rendering via a subprocess
             # so that my GUI doesn't know anything about the ete3 GUI and therefore whatever interaction was occurring
             # can no longer occur.
-            cmd = 'strainchoosr_drawimage {} {} {} "{}"'.format(self.newick_tree, self.strain_number_input.value(), self.tmpdir, self.color)
+            cmd = 'strainchoosr_drawimage {} {} {} "{}" {}'.format(self.newick_tree, self.strain_number_input.value(), self.tmpdir, self.color, self.tree_orient)
             subprocess.call(cmd, shell=True)
             pic = QLabel(self)
+            self.progress.setValue(100)
             pixmap = QPixmap(os.path.join(self.tmpdir, 'image.png'))
             scaled_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.FastTransformation)
             pic.setPixmap(scaled_pixmap)
@@ -142,12 +190,13 @@ def draw_image_wrapper():
     num_strains = int(sys.argv[2])
     output_dir = sys.argv[3]
     color = sys.argv[4]
+    orientation = sys.argv[5]
     tree = ete3.Tree(tree_file)
     diverse_strains = strainchoosr.pd_greedy(tree=tree, number_tips=num_strains, starting_strains=[])
     strainchoosr.create_colored_tree_tip_image(tree_to_draw=tree,
                                                output_file=os.path.join(output_dir, 'image.png'),
                                                representatives=strainchoosr.get_leaf_names_from_nodes(diverse_strains),
-                                               mode='r',
+                                               mode=orientation,
                                                color=color)
 
 
