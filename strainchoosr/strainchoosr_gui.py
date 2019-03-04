@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
 from PyQt5.QtWidgets import QApplication, QFileDialog, QMainWindow, QPushButton, QErrorMessage, QLabel, QSpinBox, \
-    QColorDialog, QProgressBar, QRadioButton
+    QColorDialog, QProgressBar, QRadioButton, QListWidget
 from PyQt5.QtGui import QPixmap, QPalette, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from strainchoosr import strainchoosr
 import subprocess
+import tempfile
 import shutil
 import ete3
 import sys
@@ -64,7 +65,7 @@ class StrainChoosrGUI(QMainWindow):
         self.width = 800
         self.height = 600
         self.fasta_files = list()
-        self.tmpdir = os.path.join(os.getcwd(), 'strainchoosr_tmp')  # TODO: Have a better way to handle temporary directory.
+        self.tmpdir = tempfile.mkdtemp()
         if not os.path.exists(self.tmpdir):
             os.makedirs(self.tmpdir)
         self.fasta_button = None
@@ -91,6 +92,7 @@ class StrainChoosrGUI(QMainWindow):
                                             color=self.color,
                                             orientaion=self.tree_orient)
         self.st_thread.signal.connect(self.st_finished)
+        self.save_image_button = None
         self.init_ui()
 
     def init_ui(self):
@@ -129,7 +131,12 @@ class StrainChoosrGUI(QMainWindow):
         self.file_save_button.setEnabled(False)
         self.file_save_button.clicked.connect(self.file_save)
         self.file_save_button.resize(200, 40)
-        self.file_save_button.move(450, 450)
+        self.file_save_button.move(400, 450)
+        self.save_image_button = QPushButton('Save Image', self)
+        self.save_image_button.clicked.connect(self.save_image)
+        self.save_image_button.resize(200, 40)
+        self.save_image_button.move(600, 450)
+        self.save_image_button.setEnabled(False)
         self.progress.move(0, 300)
         self.tree_orientation_rect = QRadioButton('Rectangular', self)
         self.tree_orientation_circ = QRadioButton('Circular', self)
@@ -140,6 +147,18 @@ class StrainChoosrGUI(QMainWindow):
         self.tree_orientation_circ.move(0, 375)
         self.tree_orientation_rect.show()
         self.tree_orientation_circ.show()
+
+    def save_image(self):
+        options = QFileDialog.Options()
+        filename = QFileDialog.getSaveFileName(self,
+                                               'Select Save File',
+                                               '',
+                                               'Image Files (*.png)',
+                                               options=options)[0]
+        if filename.endswith('.png'):
+            shutil.copy(os.path.join(self.tmpdir, 'image.png'), filename)
+        else:
+            shutil.copy(os.path.join(self.tmpdir, 'image.png'), filename + '.png')
 
     def orientation_btn_state(self, b):
         if b.text() == 'Rectangular':
@@ -191,7 +210,6 @@ class StrainChoosrGUI(QMainWindow):
         self.color_dialog_button.setEnabled(True)
         self.color_dialog_button.show()
         self.color_label.show()
-        self.file_save_button.setEnabled(True)
         self.newick_tree_label.setText(os.path.split(self.newick_tree)[1])
 
     def run_strainchoosr(self):
@@ -216,6 +234,8 @@ class StrainChoosrGUI(QMainWindow):
         pic.resize(scaled_pixmap.width(), scaled_pixmap.height())
         pic.move(400, 10)
         pic.show()
+        self.file_save_button.setEnabled(True)
+        self.save_image_button.setEnabled(True)
 
     def closeEvent(self, event):
         shutil.rmtree(self.tmpdir)
