@@ -3,7 +3,7 @@
 from PyQt5.QtWidgets import QApplication, QFileDialog, QMainWindow, QPushButton, QErrorMessage, QLabel, QSpinBox, \
     QColorDialog, QProgressBar, QRadioButton
 from PyQt5.QtGui import QPixmap, QPalette, QColor
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from strainchoosr import strainchoosr
 import subprocess
 import shutil
@@ -11,11 +11,47 @@ import ete3
 import sys
 import os
 
-# TODO: Make progress bar at least a bit better - currently gives very little info.
-# TODO: Have calculation get done in a separate thread - on big trees the window freezes.
 # TODO: Have image that gets created be resizeable/zoomable. Pretty useless on bigger trees.
 # TODO: Allow user to pick starting strains.
 # TODO: Allow user to select tree weights.
+
+
+class StrainChoosrThread(QThread):
+    # All I know about QThreads comes from here: https://kushaldas.in/posts/pyqt5-thread-example.html
+    signal = pyqtSignal('PyQt_PyObject')
+
+    def __init__(self, tree_file, num_strains, tmpdir, progress_bar, orientaion, color):
+        QThread.__init__(self)
+        self.tree_file = tree_file
+        self.num_strains = num_strains
+        self.tmpdir = tmpdir
+        self.progress_bar = progress_bar
+        self.orientation = orientaion
+        self.color = color
+
+    def run(self):
+        tree = ete3.Tree(self.tree_file)
+        self.progress_bar.setValue(0)
+        diverse_strains = list()
+        self.progress_bar.setValue(1)
+        diverse_strains = strainchoosr.find_starting_leaves(tree, diverse_strains)
+
+        while len(diverse_strains) < self.num_strains:
+            next_leaf = strainchoosr.find_next_leaf(diverse_strains, tree)
+            diverse_strains.append(next_leaf)
+            self.progress_bar.setValue(100 * len(diverse_strains)/self.num_strains)
+
+        # Future person looking at this - you may be wondering why launching a subprocess here is necessary at all.
+        # Here's why - the underlying ete3 code that renders the tree to image uses PyQt and somewhere in there
+        # another PyQt application is launched. Then, when this GUI gets closed, the GUI process is still running
+        # and has to be manually killed (even Ctrl+C doesn't work), presumably because only one of the two applications gets closed.
+        # I couldn't find a way to kill the ete3 PyQt app via the code, so my hacky solution is to run tree rendering via a subprocess
+        # so that my GUI doesn't know anything about the ete3 GUI and therefore whatever interaction was occurring
+        # can no longer occur.
+        cmd = 'strainchoosr_drawimage {} {} {} "{}" {}'.format(self.tree_file, self.num_strains, self.tmpdir, self.color, self.orientation)
+        subprocess.call(cmd, shell=True, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+        self.progress_bar.setValue(100)
+        self.signal.emit(strainchoosr.get_leaf_names_from_nodes(diverse_strains))
 
 
 class StrainChoosrGUI(QMainWindow):
@@ -48,6 +84,13 @@ class StrainChoosrGUI(QMainWindow):
         self.tree_orientation_rect = None
         self.tree_orientation_circ = None
         self.tree_orient = 'r'
+        self.st_thread = StrainChoosrThread(tree_file=None,
+                                            num_strains=None,
+                                            tmpdir=self.tmpdir,
+                                            progress_bar=self.progress,
+                                            color=self.color,
+                                            orientaion=self.tree_orient)
+        self.st_thread.signal.connect(self.st_finished)
         self.init_ui()
 
     def init_ui(self):
@@ -157,28 +200,22 @@ class StrainChoosrGUI(QMainWindow):
             msg.showMessage('You have not selected a tree, do that first!')
             msg.exec_()
         else:
-            self.progress.setValue(0)
-            tree = ete3.Tree(self.newick_tree)
-            diverse_strains = strainchoosr.pd_greedy(tree=tree, number_tips=self.strain_number_input.value(), starting_strains=[])
-            self.chosen_strains = strainchoosr.get_leaf_names_from_nodes(diverse_strains)
-            self.progress.setValue(50)
-            # Future person looking at this - you may be wondering why launching a subprocess here is necessary at all.
-            # Here's why - the underlying ete3 code that renders the tree to image uses PyQt and somewhere in there
-            # another PyQt application is launched. Then, when this GUI gets closed, the GUI process is still running
-            # and has to be manually killed (even Ctrl+C doesn't work), presumably because only one of the two applications gets closed.
-            # I couldn't find a way to kill the ete3 PyQt app via the code, so my hacky solution is to run tree rendering via a subprocess
-            # so that my GUI doesn't know anything about the ete3 GUI and therefore whatever interaction was occurring
-            # can no longer occur.
-            cmd = 'strainchoosr_drawimage {} {} {} "{}" {}'.format(self.newick_tree, self.strain_number_input.value(), self.tmpdir, self.color, self.tree_orient)
-            subprocess.call(cmd, shell=True)
-            pic = QLabel(self)
-            self.progress.setValue(100)
-            pixmap = QPixmap(os.path.join(self.tmpdir, 'image.png'))
-            scaled_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.FastTransformation)
-            pic.setPixmap(scaled_pixmap)
-            pic.resize(scaled_pixmap.width(), scaled_pixmap.height())
-            pic.move(400, 10)
-            pic.show()
+            self.st_thread.tree_file = self.newick_tree
+            self.st_thread.num_strains = self.strain_number_input.value()
+            self.st_thread.color = self.color
+            self.st_thread.orientation = self.tree_orient
+            self.st_thread.start()
+            self.strainchoosr_button.setEnabled(False)
+
+    def st_finished(self, result):
+        self.strainchoosr_button.setEnabled(True)
+        pic = QLabel(self)
+        pixmap = QPixmap(os.path.join(self.tmpdir, 'image.png'))
+        scaled_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.FastTransformation)
+        pic.setPixmap(scaled_pixmap)
+        pic.resize(scaled_pixmap.width(), scaled_pixmap.height())
+        pic.move(400, 10)
+        pic.show()
 
     def closeEvent(self, event):
         shutil.rmtree(self.tmpdir)
