@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-
-# Core python library
 import os
 import sys
 import copy
@@ -13,6 +11,7 @@ import pkg_resources
 # Other stuff
 import ete3
 from ete3 import NodeStyle, TreeStyle, TextFace
+from ete3.parser.newick import NewickError
 
 
 def get_version():
@@ -116,13 +115,14 @@ def find_next_leaf(diverse_leaves, tree):
     Given a set of leaves we've already decided represent the most diversity, find the next leaf that contributes
     the most diversity.
 
-    :param diverse_leaves: List of leaves that we've already decided represent the most diversity possible - each entry in this list should be an ete3.TreeNode object
+    :param diverse_leaves: List of leaves that we've already decided represent the most diversity possible - each entry
+    in this list should be an ete3.TreeNode object
     :param tree: an ete3.Tree object that contains the nodes listed in diverse_leaves
     :return: an ete3.TreeNode object representing the leaf that adds the most diversity to `diverse_leaves`
     """
-    # Here, we prune off everything except for the leaves we've already selected as diverse and one other leaf in the tree
-    # for each leaf in the tree, keeping branch lengths intact. Select the leaf that creates the tree with the longest
-    # total branch length, and return that.
+    # Here, we prune off everything except for the leaves we've already selected as diverse and one other leaf in the
+    # tree for each leaf in the tree, keeping branch lengths intact. Select the leaf that creates the tree with the
+    # longest total branch length, and return that.
     longest_total_branch_length = 0
     sets_to_try = dict()
     leaves = tree.get_leaves()
@@ -156,7 +156,8 @@ def pd_greedy(tree, number_tips, starting_strains):
 
     :param tree: An ete3.Tree object
     :param number_tips: Number of strains you want to pick out.
-    :param starting_strains: List of ete3.TreeNode objects that make up your starting strains. If empty, will be chosen automatically
+    :param starting_strains: List of ete3.TreeNode objects that make up your starting strains. If empty, will be chosen
+    automatically
     :return: List of ete3.TreeNode objects representing the maximum possible amount of diversity.
     """
     # The way this works - start out by picking the two strains that have the longest total length
@@ -168,6 +169,7 @@ def pd_greedy(tree, number_tips, starting_strains):
     diverse_strains = find_starting_leaves(tree, diverse_strains)
 
     while len(diverse_strains) < number_tips:
+        logging.info('Working on strain {num}'.format(num=len(diverse_strains) + 1))
         next_leaf = find_next_leaf(diverse_strains, tree)
         diverse_strains.append(next_leaf)
     return diverse_strains
@@ -181,7 +183,8 @@ def modify_tree_with_weights(tree, weights):
     by the multiplier specified.
 
     :param tree: an ete3.Tree object
-    :param weights: Dictionary where keys are names of nodes/tips in the tree, and values are weights by which branch lengths will be multiplied
+    :param weights: Dictionary where keys are names of nodes/tips in the tree, and values are weights by which branch
+    lengths will be multiplied
     :return: A new ete3.Tree where branch lengths have been modified.
     """
     newtree = copy.deepcopy(tree)
@@ -205,7 +208,8 @@ def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, co
     :param tree_to_draw: an ete3 Tree object. This won't get modified at any point.
     :param representatives: List with each strain name that should be highlighted.
     :param output_file: File to write output to, including extension. Works with .pdf, .png, and .svg
-    :param color: Color to show selected strains as. Defaults to red. Other choices available can be found at http://etetoolkit.org/docs/latest/reference/reference_treeview.html#ete3.SVG_COLORS
+    :param color: Color to show selected strains as. Defaults to red. Other choices available can be found at
+    http://etetoolkit.org/docs/latest/reference/reference_treeview.html#ete3.SVG_COLORS
     :param mode: method for tree drawing - options are r for rectangular or c for circular
     :param rotation: how much to rotate the tree (in a clockwise direction). Default is 0.
     """
@@ -272,7 +276,8 @@ def generate_html_report(completed_choosr_list, output_report):
 
     Generates a nice(ish) looking HTML report detailing StrainChoosr output.
 
-    :param completed_choosr_list: List of CompletedChoosr objects - each of these has a list of leaf names, path to an image file, and a name
+    :param completed_choosr_list: List of CompletedChoosr objects - each of these has a list of leaf names, path to an
+    image file, and a name
     :param output_report: filename to write HTML report. Will overwrite a report that already exists.
     """
     # With tabs as shown in w3schools: https://www.w3schools.com/howto/howto_js_tabs.asp
@@ -347,9 +352,11 @@ def generate_html_report(completed_choosr_list, output_report):
     for completed_choosr in completed_choosr_list:
         # Make the first completed choosr show by default.
         if completed_choosr_list.index(completed_choosr) == 0:
-            html_content.append('<button class="tablinks" id="defaultOpen" onclick="openCity(event, \'{name}\')">{name}</button>'.format(name=completed_choosr.name))
+            html_content.append('<button class="tablinks" id="defaultOpen" onclick="openCity(event, '
+                                '\'{name}\')">{name}</button>'.format(name=completed_choosr.name))
         else:
-            html_content.append('<button class="tablinks" onclick="openCity(event, \'{name}\')">{name}</button>'.format(name=completed_choosr.name))
+            html_content.append('<button class="tablinks" onclick="openCity(event, \'{name}\')">{name}</button>'
+                                .format(name=completed_choosr.name))
     html_content.append('</div>')
     for completed_choosr in completed_choosr_list:
         html_content.append('<div id="{name}" class="tabcontent">'.format(name=completed_choosr.name))
@@ -419,7 +426,7 @@ def argument_parsing(args):
     return parser.parse_args(args)
 
 
-def run_strainchoosr(treefile, number_representatives, starting_strains=[], output_name='strainchoosr_output',
+def run_strainchoosr(treefile, number_representatives, starting_strains=None, output_name='strainchoosr_output',
                      tree_mode='r', weight_file=None, verbosity='info', rep_strain_color='red'):
     """
 
@@ -427,14 +434,20 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
 
     :param treefile: Path to a newick-formatted treefile.
     :param number_representatives: List of numbers of representatives.
-    :param starting_strains: List of leaf names that should make up starting strains. Defaults to nothing, so starting strains automatically get chosen
+    :param starting_strains: List of leaf names that should make up starting strains. Defaults to nothing, so starting
+    strains automatically get chosen
     :param output_name: Base name for output file - defaults to strainchoosr_output
-    :param tree_mode: Mode for displaying tree in output HTML file. Can be r for rectangualar or c for circular. Defaults to r.
-    :param weight_file: If specified, is a path to a file that modifies branch lengths. File should be tab-separated, with leaf names in column one and multiplier in column two
-    :param verbosity: verbosity level: options are debug for loads of information, info for regular amounts, or warning for almost none.
+    :param tree_mode: Mode for displaying tree in output HTML file. Can be r for rectangualar or c for circular.
+    Defaults to r.
+    :param weight_file: If specified, is a path to a file that modifies branch lengths. File should be tab-separated,
+    with leaf names in column one and multiplier in column two
+    :param verbosity: verbosity level: options are debug for loads of information, info for regular amounts, or warning
+    for almost none.
     :param rep_strain_color: Color for strains picked to be shown in html report. Defaults to red.
     :return: dictionary where number of strains is the key and the value is a list of representatives
     """
+    if starting_strains is None:
+        starting_strains = []
     output_dictionary = dict()
     if verbosity == 'info':
         logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
@@ -448,7 +461,11 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
         logging.basicConfig(format='\033[92m \033[1m %(asctime)s \033[0m %(message)s ',
                             level=logging.WARNING,
                             datefmt='%Y-%m-%d %H:%M:%S')
-    tree = ete3.Tree(newick=treefile)
+    try:
+        tree = ete3.Tree(newick=treefile)
+    except NewickError:
+        tree = ete3.Tree(newick=treefile,
+                         quoted_node_names=True, format=1)
     if weight_file is not None:
         weights = read_weights_file(weight_file)
         original_tree = copy.deepcopy(tree)
@@ -460,9 +477,11 @@ def run_strainchoosr(treefile, number_representatives, starting_strains=[], outp
             output_dictionary[number] = list()
             if len(tree.get_leaves()) < number:
                 raise ValueError('You requested that {} strains be selected, but your tree only has {} leaves. '
-                                 'Please select an appropriate number of strains to be selected.'.format(number,
-                                                                                                         len(tree.get_leaves())))
+                                 'Please select an appropriate number of strains to be selected.'
+                                 .format(number,
+                                         len(tree.get_leaves())))
             starting_leaves = find_starting_leaves(tree, starting_strains)
+            logging.info('Found starting leaves {}'.format(starting_leaves))
             strains = pd_greedy(tree, number, starting_leaves)
             output_image = os.path.join(tmpdir, 'strains_{}.png'.format(number))
             create_colored_tree_tip_image(tree_to_draw=tree,

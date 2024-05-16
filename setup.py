@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='strainchoosr',
-    version='0.1.2',
+    version='0.1.3',
     packages=find_packages(),
     entry_points={
         'console_scripts': [
@@ -16,7 +16,7 @@ setup(
     author='Andrew Low',
     author_email='andrew.low@canada.ca',
     url='https://github.com/lowandrew/StrainChoosr',
-    setup_requires=['pytest-runner'],
+    #setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     install_requires=['pytest',
                       'ete3',
