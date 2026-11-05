@@ -12,14 +12,18 @@ scaled down set of sequences. The algorithm behind it is described in Pardi2005_
 Installation
 ============
 
-``StrainChoosr`` lives on PyPi, so you can install via pip/pip3:
+``StrainChoosr`` lives on PyPI. Install the core package for the selection API:
 
 ``pip install strainchoosr``
 
-Alternatively, you can install the latest version from git. Note that there may be breaking changes
+The CLI, tree visualizations, and graphical interface require the optional visualization dependencies:
+
+``pip install "strainchoosr[visualization]"``
+
+Alternatively, install the latest version from git with those dependencies. Note that there may be breaking changes
 pushed to the repository, so this isn't necessarily advised.
 
-``pip install git+https://github.com/lowandrew/StrainChoosr.git``
+``pip install "strainchoosr[visualization] @ git+https://github.com/OLC-Bioinformatics/StrainChoosr.git"``
 
 Quickstart
 ==========

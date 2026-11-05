@@ -6,27 +6,29 @@ import base64
 import logging
 import tempfile
 import argparse
-import pkg_resources
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:
+    from importlib_metadata import PackageNotFoundError, version
 
 # Other stuff
 import ete3
-from ete3 import NodeStyle, TreeStyle, TextFace
 from ete3.parser.newick import NewickError
 
 
 def get_version():
     """
 
-    Uses :mod:`pkg_resources` to figure out what version StrainChoosr is.
+    Uses package metadata to figure out what version StrainChoosr is.
 
     :return: StrainChoosr X.Y.Z if a version was found, otherwise StrainChoosr (Unknown version)
     """
 
     try:
-        version = 'StrainChoosr {}'.format(pkg_resources.get_distribution('strainchoosr').version)
-    except pkg_resources.DistributionNotFound:
-        version = 'StrainChoosr (Unknown version)'
-    return version
+        package_version = version('strainchoosr')
+    except PackageNotFoundError:
+        package_version = '(Unknown version)'
+    return 'StrainChoosr {}'.format(package_version)
 
 
 def find_starting_leaves(tree, starting_leaf_list):
@@ -213,6 +215,14 @@ def create_colored_tree_tip_image(tree_to_draw, representatives, output_file, co
     :param mode: method for tree drawing - options are r for rectangular or c for circular
     :param rotation: how much to rotate the tree (in a clockwise direction). Default is 0.
     """
+    try:
+        from ete3 import NodeStyle, TreeStyle, TextFace
+    except ImportError as exc:
+        raise ImportError(
+            'Tree rendering requires the StrainChoosr visualization extra; '
+            'install strainchoosr[visualization].'
+        ) from exc
+
     tree = copy.deepcopy(tree_to_draw)  # Don't want to actually modify original tree.
     ts = TreeStyle()
     ts.mode = mode
